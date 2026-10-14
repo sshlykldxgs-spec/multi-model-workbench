@@ -165,7 +165,7 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 ## 五、P0 收尾（执行方第一件事）
 
 > **2026-10-14 更新：P0 的验证已由指挥方完成。** 工具链装齐后,
-> 六道后端门禁与三道前端门禁**全部通过**，`pytest` **27/27 全绿**。
+> **后端七道**门禁与**前端四道**门禁**全部通过**，`pytest` **27/27 全绿**。
 > 过程中发现并修复 **18 个缺陷**（清单见 `docs/PROGRESS.md`）。
 >
 > 因此原来的 P0-V1 / V2 / V3 / V6 **已完成，不要再做**。
@@ -182,11 +182,13 @@ P0 代码规模：后端 63 文件 / 3302 行，前端 7 文件 / 687 行。
 | 3 类型检查 | `uv run pyright` | 0 errors, 0 warnings |
 | 4a 层内方向 | `uv run lint-imports` | 1 kept, 0 broken |
 | 4b SDK 位置 | `uv run python -m app.scripts.check_layering` | 通过 |
-| 5 单元测试 | `uv run pytest -q` | 27 passed |
-| 6 契约一致性 | `uv run python -m app.scripts.check_contract` | 通过 |
+| 5 SDK 位置（R-1/R-3） | `uv run python -m app.scripts.check_layering` | 通过 |
+| 6 单元测试 | `uv run pytest -q` | 27 passed |
+| 7 契约一致性 | `uv run python -m app.scripts.check_contract` | 通过 |
 | 前端 1 | `npm run typecheck` | exit 0 |
 | 前端 2 | `npm run lint` | exit 0 |
 | 前端 3 | `npm run build` | exit 0 |
+| 前端 4 | `npm run test:e2e:smoke` | 1 passed（需后端在 8000） |
 
 ### 执行方剩余的三件事
 
