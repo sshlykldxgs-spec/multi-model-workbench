@@ -41,7 +41,8 @@
 | **`/security-review`（内置）** | 安全审查 | 对本项目尤其重要（提示词注入、凭据） `[已核]` |
 | **`/simplify`（内置）** | 复用、简化、效率、抽象层级 | "逻辑优化"直接对应这个 `[已核]` |
 | **交叉模型审查** | 防自我确认 | **用另一个模型审 Claude 的代码**。这是蓝图第 10 节的建议，也是防"自己给自己打高分"的关键 |
-| **OpenCodeReview** | 产品要接的评审工具 | 同一套东西先在开发期用一遍，等于提前替 P4 做验证 |
+| **OpenCodeReview** | 产品要接的评审工具，**也是开发期就能用的审查工具** | 已核实：`npm i -g @alibaba-group/open-code-review`，命令 `ocr`。可作 Claude Code 插件：`/plugin marketplace add alibaba/open-code-review`；或装技能：`npx skills add alibaba/open-code-review --skill open-code-review`。**先在开发期用一遍，等于提前替 P4 做验证** `[已核]` |
+| **`ocr review --preview`** | 不调模型，只看会审哪些文件 | **零成本连通性验证**，P0 阶段就能确认沙箱里能否跑 `[已核]` |
 | **`ruff` + `pyright`** | 静态检查 | 后端门禁，见 `backend/AGENTS.md` |
 | **`eslint` + `tsc --noEmit`** | 前端门禁 | 见 `frontend/AGENTS.md` |
 

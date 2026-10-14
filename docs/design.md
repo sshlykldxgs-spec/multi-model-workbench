@@ -491,8 +491,8 @@ Reviewer 无论由谁担任，**必须**输出同一结构。工作流只认这�
 | # | 待核实 | 何时必须清楚 | 状态 |
 |---|--------|------------|------|
 | 1 | MAF 1.x 实际 API：包名与版本、各连接器 import 路径、工作流 API、检查点接口与是否有 Postgres 实现、MCP 注册方式、human-in-the-loop 机制、OTel 开启方式、YAML 声明支持、预览功能清单 | **P0 开工前**（决定骨架怎么写） | **部分核实**：见 12.1 |
-| 2 | OpenCodeReview：npm 包名与安装、`ocr review` 确切子命令与参数、依赖的 Git 版本、输出是否可稳定结构化解析、沙箱内能否跑通 | **P4 开工前**（蓝图也要求先做小验证） | 未核实（检索受阻） |
-| 3 | 嵌入模型选型与中文检索：最新嵌入模型型号/维度/定价、pgvector 版本与索引、Postgres 中文全文检索方案 | **P3 开工前** | 未核实（检索受阻） |
+| 2 | OpenCodeReview：npm 包名与安装、`ocr review` 确切子命令与参数、依赖的 Git 版本、输出是否可稳定结构化解析、沙箱内能否跑通 | **P4 开工前**（蓝图也要求先做小验证） | **已核实**：见 12.4。`--format json --audience agent` 可稳定解析 |
+| 3 | 嵌入模型选型与中文检索：最新嵌入模型型号/维度/定价、pgvector 版本与索引、Postgres 中文全文检索方案 | **P3 开工前** | **已核实**：见 12.5。**注意 pgvector 2000 维索引上限** |
 | 4 | MAF 1.0 的 YAML 声明字段 | P5 开工前 | 未开始 |
 | 5 | 本机工具链升级：Git 需 ≥2.41（当前 2.39.5）、uv/ruff/pyright/docker/psql 待安装 | P0 开工前 | 待用户执行 |
 
@@ -506,6 +506,19 @@ Reviewer 无论由谁担任，**必须**输出同一结构。工作流只认这�
 | D-2 | 预算上限无具体默认值 | decisions.md D-2 |
 | D-3 | MAF 连接器降级为 `ProviderAdapter` 的可选实现，而非唯一接入路径 | 本文 2.3 |
 | D-4 | `models` 等表补充中转站、路由、计量相关字段 | 本文第 10 节 |
+| D-5 | 服务器区域定为**美国**（蓝图只要求"支持地区"） | 本文 12.7 |
+| D-6 | 三个默认角色**分属三家厂商**（蓝图只要求 Reviewer 与 Worker 不同） | 本文 12.7 |
+| D-7 | 界面**仅中文**，不做 i18n（蓝图未规定，但前端工作量为零成本项） | 本文 12.7 |
+| D-8 | 沙箱**预置离线依赖缓存**（蓝图只说"限制网络"，没说怎么让任务能跑） | 本文 12.6 |
+
+### 12.7 第三轮确认（2026-10-14）
+
+| 项 | 决定 | 影响 |
+|----|------|------|
+| 服务器区域 | **美国** | 三家厂商原生支持最完整、Azure OpenAI 可用性最好；代价是亚洲团队每次对话多 150–250ms |
+| 默认角色模型分配 | **三角色分属三家**：Planner / Worker / Reviewer 各一家 | 天然满足"Reviewer 与 Worker 不同模型"，无需额外提示词，且顺带验证三家接入 |
+| 界面语言 | **仅中文界面**，代码与标识符全英文 | 前端零额外工作量；文案集中管理以便将来加 i18n |
+| 沙箱 | Python + Node + 多语言工具链 + **离线依赖缓存** | 见 12.6 |
 
 ### 12.1 MAF 已核实事实（2026-10-14）
 
@@ -530,9 +543,150 @@ uv pip index versions agent-framework
 
 以实际返回为准，并把版本锁进 `pyproject.toml` 与 `uv.lock`。
 
-**仍未核实**（P0 前必须补）：检查点接口的确切形状与是否存在官方关系库实现；
-MCP 客户端注册方式；human-in-the-loop 机制；OTel 开启方式；YAML 声明字段；
-Skills 的确切机制与稳定状态；各连接器是否支持自定义 `base_url`。
+**仍未核实**（P0 前必须补）：OTel 开启方式；YAML 声明字段；Skills 的确切机制与稳定状态；
+各连接器是否支持自定义 `base_url`。P0 开工前直接查官方文档与 `samples/`。
 
-> 说明：本次核实过程中部分检索受阻（账户额度问题），上表只收录能确认来源的条目。
-> 未核实项不要凭印象写代码，P0 开工前补齐或直接查官方文档与 `samples/`。
+### 12.2 检查点：已核实（重大，直接改变 P4 做法）
+
+**结论：确认无官方 Postgres 实现，蓝图判断正确，P4 必须自研。** 但接口形状已明确：
+
+- 检查点存储是**协议（protocol）**，内置 `InMemoryCheckpointStorage`、`FileCheckpointStorage`；
+  另有 **Cosmos DB** 实现（`agent-framework-azure-cosmos`，预发布）。
+- Cosmos 实现需满足 **6 个方法**，这就是自研 Postgres 实现要实现的接口：
+  `save`、`load`、`list_checkpoints`、`delete`、`get_latest`、`list_checkpoint_ids`。
+- 接入方式：把存储传给 builder，**每个 superstep 结束时自动写检查点**：
+
+```python
+workflow = WorkflowBuilder(
+    start_executor=start,
+    checkpoint_storage=checkpoint_storage,
+).build()
+latest = checkpoint_storage.get_latest(workflow_name=workflow.name)
+await workflow.run(checkpoint_id=latest.checkpoint_id)   # 恢复
+```
+
+- **执行器必须自己声明要持久化的状态**（只存存储不够）：覆写 `on_checkpoint_save()` 返回 dict，
+  `on_checkpoint_restore(state)` 读回。
+- 检查点捕获四样东西：各执行器局部状态（`ctx.set_executor_state()`）、跨执行器共享状态
+  （`ctx.set_state()`）、待处理消息队列、工作流位置。
+
+#### 12.2.1 序列化是真正的坑（必读）
+
+内置的 File / Cosmos / Foundry 检查点存储对 JSON 处理不了的类型**用 pickle**，
+且**默认启用受限 unpickler**：只允许内置安全类型、框架类型、OpenAI SDK 类型；
+**辅助函数与非类型全局对象一律拒绝**。
+
+自定义类型必须注册，否则加载抛 `WorkflowCheckpointException`：
+
+- 单实例：`allowed_checkpoint_types=["my_app.models:MyState"]`（`module:qualname` 格式）
+- 进程级：`agent_framework.register_checkpoint_type(MyState)`
+  —— 对**所有**后端生效，包括调用前已创建的存储实例。另有 `register_state_type`。
+
+官方明确把检查点存储当作**信任边界**：存储必须是可信的私有基础设施，
+**绝不可从不可信来源加载检查点**（pickle 有任意代码执行风险）。
+
+**自研 Postgres 检查点的两条硬要求**：
+1. 实现上述 6 个方法；事务性与并发写语义官方未定义，**必须自己定清楚并写测试**。
+2. 状态用 JSON 优先；必须 pickle 的类型要显式注册，并确保反序列化只来自我们自己的库表。
+
+### 12.3 人工确认（human-in-the-loop）
+
+- 工具侧用**审批标记**声明：`approval_mode="always_require"` 一类（文档中 C# 为
+  `@tool(approval_mode="always_require")`，Python 侧写法 P0 前确认）。
+  这正好对应我们的 `write` / `destructive` 风险级别 —— **风险级别→审批标记的映射是机械的**。
+- 已知限制（官方 issue）：审批响应目前**只带布尔值**，不能附带意见或修改后的参数；
+  托管 Agent 形态下的人工审批存在问题。
+  → 影响：我们的 `approvals` 表要**自己存**意见、修改后的参数、决定人（蓝图已如此设计，正确）。
+
+### 12.4 OpenCodeReview：已核实（蓝图遗留问题解决）
+
+蓝图中"它的输出格式我没有核对细节，P4 前要做一次小验证" —— **现已可确认可解析**：
+
+| 项 | 结论 |
+|----|------|
+| npm 包名 | **`@alibaba-group/open-code-review`**（官方） |
+| 安装 | `npm install -g @alibaba-group/open-code-review`，命令为 `ocr` |
+| 依赖 | **Git ≥ 2.41**、**Node ≥ 18**、一个 LLM API 密钥 |
+| 许可 | Apache 2.0 |
+| **结构化输出** | **`ocr review --format json --audience agent`** —— 机器可读，专为 CI/agent 设计 |
+| 常用命令 | `ocr review`（工作区改动）、`--from main --to <branch>`（分支范围）、`--commit <sha>`、`ocr scan`（全文件） |
+| 预览 | `ocr review --preview` 不调模型，只看会审什么 |
+| 模型配置 | 兼容 **OpenAI 与 Anthropic 风格**端点，支持本地模型 |
+| 可调参数 | `--concurrency`、`--timeout`、`--background/-b`（业务上下文） |
+| 规则 | `--rule <path>` → `<repo>/.opencodereview/rule.json` → `~/.opencodereview/rule.json` → 内置 |
+| 可观测 | 内置 OpenTelemetry |
+| 生态 | 可作 Claude Code 插件（`/plugin marketplace add alibaba/open-code-review`）、Codex 插件、技能 `npx skills add alibaba/open-code-review --skill open-code-review` |
+
+**对我们的三点意义**：
+1. `--format json --audience agent` 让"适配器把工具输出转成统一评审结论"有了稳定输入，
+   P4 的 `CliToolExecutor` 风险大幅下降。
+2. `--preview` 可在不花钱的前提下做连通性验证 → **P0/P2 就能提前验证**，不必等到 P4。
+3. 它支持 OpenAI 与 Anthropic 风格端点 → 可指向我们的**中转条目**，与其他调用共用预算与审计。
+   注意它自己调模型，用量要纳入预算（蓝图已提示）。
+
+### 12.5 嵌入模型与中文检索：已核实
+
+**OpenAI 仍是 2024 年 1 月那三个模型，无换代**（价格两年未变）：
+
+| 模型 | 默认维度 | 可截断至 | 最大输入 | 单价 / 1M token |
+|------|---------|---------|---------|----------------|
+| `text-embedding-3-large` | 3072 | 256 | 8191 | **$0.13** |
+| `text-embedding-3-small` | 1536 | 256 | 8191 | **$0.02** |
+| `text-embedding-ada-002`（旧） | 1536 固定 | — | 8191 | $0.10 |
+
+两个 v3 模型用 Matryoshka 表示学习训练，**可截断维度且质量损失远小于 PCA**：
+官方数据是 3-large 截到 256 维仍优于 ada-002 的 1536 维。
+
+#### 12.5.1 pgvector 的维度上限是硬约束（重要）
+
+**pgvector 的 HNSW 与 IVFFlat 索引：`vector` 最多 2000 维，`halfvec` 最多 4000 维。**
+
+→ **`text-embedding-3-large` 的 3072 维默认值无法作为普通 `vector` 列建索引。**
+必须二选一：用 `halfvec` 列，或通过 `dimensions` 参数截断。
+
+单向量存储开销 `4 * 维度 + 8` 字节。1536 维、100 万向量的索引约 6 GB（FP32）。
+
+**本项目选型建议**（你三家都有、内容以中文为主）：
+
+| 方案 | 维度 | 优点 | 缺点 |
+|------|------|------|------|
+| **`text-embedding-3-small`（1536）** | 1536 | 便宜（$0.02）、可直接建 HNSW 索引、无需 halfvec | 中文质量中等 |
+| `text-embedding-3-large` + `halfvec` | 3072 | 质量最好 | 需 halfvec；成本 6.5 倍；运维复杂一点 |
+| `text-embedding-3-large` 截断 1024 | 1024 | 质量与成本折中，可普通索引 | 需先跑评测集确认损失 |
+| 多语言开源模型自托管（BGE-M3 / Qwen3-Embedding 一类） | 视模型 | 中文可能更好、数据不出境 | 需自托管 GPU；与"单台服务器"冲突 |
+
+**建议**：先固定 `text-embedding-3-small`（1536 维），把接口与"分块记录嵌入模型名"做好
+（蓝图已要求），等 P3 评测集出来再决定是否换。**换模型必须重建全部索引，所以别提前优化。**
+
+#### 12.5.2 中文全文检索
+
+Postgres 原生全文检索对中文**需要额外扩展**（默认分词器不切中文）。可选方案与状态：
+
+| 方案 | 状态 | 备注 |
+|------|------|------|
+| **pg_bigm** | 有实测可用报告 | 二元分词，中文召回尚可，安装相对简单 |
+| zhparser / pg_jieba | 需编译 SCWS 等分词引擎 | 分词质量好，但部署麻烦，多用于发行版镜像 |
+| pgroonga | 部分环境需**外部 PostgreSQL** | 功能强（支持 CJK），但部署约束多 |
+
+**建议维持蓝图决定**：第一版**纯向量检索**，P3 起用评测集看效果，
+再决定是否加 pg_bigm 做混合检索（向量 + 关键词用 RRF 融合）。
+纯向量对**专有名词、编号**的召回确实差（蓝图第 12 节第 8 项已点名），
+所以**评测集里必须包含专有名词与编号类问题**，否则测不出这个短板。
+
+### 12.6 代码沙箱（用户 2026-10-14 确认）
+
+| 项 | 决定 |
+|----|------|
+| 基础工具链 | **Python 3.11+ 与 Node 20+**、git、ripgrep 等 |
+| 多语言 | **额外装编译型语言工具链**（Java / Go / Rust 一类） |
+| 离线依赖 | **预置 pip/npm 离线镜像与包缓存** ← 关键 |
+
+**为什么离线缓存是关键**：沙箱**默认不开放外网**（蓝图第 9 节），
+若不预置依赖，沙箱内 `pip install` / `npm install` 一律失败，
+代码任务只能跑纯标准库脚本 —— 等于这个功能白做。
+
+**落地要求**：
+- 自建沙箱基础镜像，预置常用包缓存，版本固定；
+- 镜像本身随项目版本管理，CI 里构建与扫描；
+- 成员若需额外包，走"申请→加进镜像"的流程，**不允许沙箱临时联网装**；
+- 镜像体积要控制（多语言工具链会显著变大），必要时拆成多个镜像按任务类型选择。
