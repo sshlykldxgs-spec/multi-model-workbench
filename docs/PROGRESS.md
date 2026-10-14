@@ -63,19 +63,49 @@
 
 每人每月 **$50** / 每日 **$10** / 单次运行 **$2**，全局可配。80% 告警、100% 中止。
 
+## 指挥通道（A-37）
+
+无机器通道，走**粘贴**：用户把「启动提示词」给 Codex → Codex 按「回执模板」填 →
+用户粘回给指挥方审查 → 通过则产出下一张卡。
+
+审查要点：门禁**原始输出**、是否碰铁律（尤其 R-1 与 R-3）、契约与实现是否一致、
+测试是否在测行为而非迁就实现。
+
 ## 交付给执行方的任务卡
 
-| 阶段 | 文件 | 状态 |
-|------|------|------|
-| P0 收尾 | `docs/tasks/P0-收尾.md` | 待执行（执行方第一件事） |
-| P1 | `docs/tasks/P1.md` | 待执行（分 4 批：A 数据库与登录 / B 模型注册表 / C 三家接入 / D 会话与切换） |
-| P2–P6 | 未拆分 | 任务名与约束见 `docs/handoff-codex.md` 第四节 |
+| 文件 | 状态 |
+|------|------|
+| `docs/tasks/README.md` | 卡片格式、铁律速查、指挥通道 |
+| `docs/tasks/启动提示词.md` | 给用户，开 Codex 会话时粘贴 |
+| `docs/tasks/回执模板.md` | 给执行方，做完任务卡后填写 |
+| `docs/tasks/P0-收尾.md` | **待执行（执行方第一件事）** |
+| `docs/tasks/P1.md` | 待执行（分 4 批：A 数据库与登录 / B 模型注册表 / C 三家接入 / D 会话与切换） |
+| P2–P6 | 未拆分，任务名与约束见 `docs/handoff-codex.md` 第四节 |
 
 ## 待办
 
-- [ ] P0 开工前：升级 Git 到 ≥2.41、安装 uv/ruff/pyright/docker/psql、`gh auth login`
-- [ ] P0 开工前：跑 `uv pip index versions agent-framework` 确认真实版本
-- [ ] 用户答复 `docs/decisions.md` 第七节的遗留项
+- [ ] **用户执行**：`gh auth login`（当前未登录，无法建远程仓）
+- [ ] **用户执行**：在 GitHub 建私有仓并 `git remote add`（命令见「环境准备」一节）
+- [ ] **Codex 执行**：`docs/tasks/P0-收尾.md`
+- [ ] P0 收尾前：升级 Git 到 ≥2.41、安装 uv/docker/psql
+- [ ] P0 收尾前：跑 `uv pip index versions agent-framework` 确认真实版本，
+      并把锁文件（`uv.lock`、`package-lock.json`）提交进仓库
+
+## 远程仓库（A-38）
+
+**状态：未建。** `gh` 未登录，且仓库没配 git 身份（提交时用 `-c` 临时指定）。
+
+建仓命令（需用户执行）：
+
+```bash
+gh auth login
+```
+
+```bash
+cd /Users/pengxuezhi/项目蓝图2.0/multi-model-workbench && gh repo create multi-model-workbench --private --source=. --remote=origin --push
+```
+
+`.gitignore` 已核对：`package-lock.json` 与 `uv.lock` **不会被忽略**（必须提交，CI 依赖它们）。
 
 ## 环境现状（本机，2026-10-14 实测）
 
