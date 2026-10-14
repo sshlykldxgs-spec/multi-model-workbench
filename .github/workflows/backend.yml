@@ -1,0 +1,62 @@
+name: 后端门禁
+
+on:
+  push:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: workbench
+          POSTGRES_PASSWORD: workbench
+          POSTGRES_DB: workbench
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://workbench:workbench@localhost:5432/workbench
+      SESSION_SECRET: ci-secret-not-for-production
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 安装依赖
+        run: uv sync --extra dev
+
+      # 蓝图第 10 节：四道门禁，任一不过不算完成。
+      - name: 门禁 1 · 格式
+        run: uv run ruff format --check .
+
+      - name: 门禁 2 · 代码检查
+        run: uv run ruff check .
+
+      - name: 门禁 3 · 类型检查
+        run: uv run pyright
+
+      - name: 门禁 4 · 分层契约（R-1 / R-3）
+        run: uv run lint-imports
+
+      - name: 门禁 5 · 单元测试
+        run: uv run pytest -q
+
+      - name: 门禁 6 · OpenAPI 与契约一致
+        run: uv run python -m app.scripts.check_contract

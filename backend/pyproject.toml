@@ -1,0 +1,110 @@
+[project]
+name = "workbench-backend"
+version = "0.0.1"
+description = "多模型工作台 · 后端"
+requires-python = ">=3.11"
+dependencies = [
+    # --- Web ---
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+
+    # --- 数据 ---
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "pgvector>=0.3.6",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-dotenv>=1.0",
+
+    # --- 安全 ---
+    # argon2 密码哈希；itsdangerous 用于会话 Cookie 签名
+    "argon2-cffi>=23.1",
+    "itsdangerous>=2.2",
+
+    # --- 模型接入 ---
+    # 中转站以 OpenAI 兼容协议为主，官方 SDK 是协议适配器的底座。
+    # R-3：厂商 SDK 只允许出现在 app/gateway/protocols/ 内。
+    "openai>=1.54",
+    "anthropic>=0.39",
+    "google-genai>=0.8",
+
+    # --- 可观测 ---
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-exporter-otlp-proto-http>=1.28",
+
+    # --- 编排层（仅 app/orchestrator/ 内可 import，见 importlinter 契约）---
+    # MAF 版本以 `uv pip index versions agent-framework` 实测为准后再锁。
+    # 蓝图与 design.md 12.1 均记载：各索引源对最新版说法不一。
+    "agent-framework>=1.0.1",
+]
+
+[project.optional-dependencies]
+# 代码沙箱与 OpenCodeReview 不在后端依赖里，它们是沙箱镜像的事。
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",       # FastAPI TestClient 的底座
+    "ruff>=0.7",
+    "pyright>=1.1.390",
+    "import-linter>=2.0",
+]
+
+[tool.uv]
+package = false
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
+ignore = [
+    "S101",  # assert：测试里要用
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["error"]
+
+# ---------------------------------------------------------------- pyright
+[tool.pyright]
+include = ["app", "tests"]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+
+# ---------------------------------------------------------------- 分层契约
+# 这是 design.md R-1 与 R-3 的机械强制手段。
+# 不靠自觉：任何人（或 AI）在业务代码里 import MAF 或厂商 SDK，CI 直接失败。
+[tool.importlinter]
+root_packages = ["app"]
+
+[[tool.importlinter.contracts]]
+name = "R-1：MAF 只允许出现在编排层"
+type = "forbidden"
+source_modules = ["app.api", "app.core", "app.middleware", "app.tools", "app.knowledge", "app.workers", "app.models", "app.schemas", "app.gateway"]
+forbidden_modules = ["agent_framework"]
+
+[[tool.importlinter.contracts]]
+name = "R-1：编排层不得依赖 API 层（依赖只能单向向下）"
+type = "forbidden"
+source_modules = ["app.orchestrator", "app.gateway", "app.tools", "app.knowledge"]
+forbidden_modules = ["app.api", "app.middleware"]
+
+[[tool.importlinter.contracts]]
+name = "R-3：厂商 SDK 只允许出现在协议适配器内"
+type = "forbidden"
+source_modules = ["app.api", "app.core", "app.middleware", "app.orchestrator", "app.tools", "app.knowledge", "app.workers", "app.schemas", "app.models"]
+forbidden_modules = ["openai", "anthropic", "google.genai"]

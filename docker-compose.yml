@@ -1,0 +1,49 @@
+# 本地开发编排。生产部署见 docs/design.md 第 11 节（单台服务器 + Caddy）。
+#
+# 蓝图第 9 节：第一版部署在单台服务器上，Docker Compose 一条命令起停。
+#
+# 用法：
+#   docker compose up -d postgres     # 只起数据库，后端在宿主机上跑（开发推荐）
+#   docker compose --profile full up  # 连后端一起起
+
+name: workbench
+
+services:
+  postgres:
+    # 必须用 pgvector 镜像 —— 向量与业务数据同库是蓝图的核心选型（A-3）
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: workbench
+      POSTGRES_PASSWORD: workbench
+      POSTGRES_DB: workbench
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 首次启动时启用扩展。pgvector 建表前必须 CREATE EXTENSION。
+      - ./infra/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workbench -d workbench"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    profiles: ["full"]
+    build:
+      context: ./backend
+    env_file: [./backend/.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://workbench:workbench@postgres:5432/workbench
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 开发期挂载源码，改代码即生效
+    volumes:
+      - ./backend:/app
+    command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--reload"]
+
+volumes:
+  pgdata:

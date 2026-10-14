@@ -1,0 +1,24 @@
+# 沙箱内可用的 Python 包（离线 wheelhouse 的来源清单）。
+#
+# 规则（docs/sandbox-image.md 第 3.4 节）：
+#   成员需要新包 → 申请 → 加进本文件 → CI 重建 deps 层 → 发布新镜像版本。
+#   不允许容器内临时联网装包。
+#
+# P0 只放最小集；P4-A 起按代码任务的实际需要扩充。
+
+# 基础
+pytest
+requests
+httpx
+
+# 常见数据处理
+numpy
+pandas
+
+# 模型调用（代码任务里可能直接用到，也供被审查的项目使用）
+openai
+anthropic
+
+# 工具
+rich
+typer

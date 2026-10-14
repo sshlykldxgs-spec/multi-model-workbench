@@ -1,0 +1,37 @@
+# 代码沙箱基础层：系统工具 + 版本受控的 Git。
+#
+# 为什么自己编 Git：蓝图与 design.md 12.4 已核实，OpenCodeReview 要求 Git >= 2.41，
+# 而 Debian slim 自带的版本偏低。这是硬约束，不是优化。
+#
+# 见 docs/sandbox-image.md 第 2 节（三层镜像中的 base 层）。
+
+FROM debian:bookworm-slim
+
+ARG GIT_VERSION=2.47.1
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl wget gnupg ripgrep jq unzip \
+      build-essential libssl-dev libcurl4-openssl-dev libexpat1-dev gettext zlib1g-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# 从源码编译 Git，版本可控且可复现（apt 的版本达不到 2.41+）
+RUN curl -fsSL "https://mirrors.edge.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.gz" -o /tmp/git.tar.gz \
+ && tar -xzf /tmp/git.tar.gz -C /tmp \
+ && make -C "/tmp/git-${GIT_VERSION}" -j"$(nproc)" prefix=/usr/local all \
+ && make -C "/tmp/git-${GIT_VERSION}" prefix=/usr/local install \
+ && rm -rf /tmp/git.tar.gz "/tmp/git-${GIT_VERSION}" \
+ && git --version
+
+# 非 root 运行（沙箱安全基本要求，见 docs/sandbox-image.md 第 5 节）
+RUN groupadd -g 10001 sandbox \
+ && useradd -u 10001 -g 10001 -m -s /bin/bash sandbox
+
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+ENV PATH="/usr/local/bin:${PATH}"
+
+USER sandbox
+WORKDIR /home/sandbox
+
+CMD ["/bin/bash"]

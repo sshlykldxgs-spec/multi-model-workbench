@@ -1,0 +1,24 @@
+# P0 最小验证镜像：只为了回答一个问题 ——
+# OpenCodeReview 在无外网的沙箱里能不能装起来、能不能跑起来。
+#
+# 见 docs/sandbox-image.md 第 7 节。
+# 关键设计：预装 ocr，而不是运行期 npx 拉取（沙箱无外网，npx 必然失败）。
+
+FROM workbench-sandbox-base:latest
+
+ARG NODE_MAJOR=20
+USER root
+
+RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/* \
+ && node --version && npm --version
+
+# 预装 OpenCodeReview（官方包名 @alibaba-group/open-code-review，命令为 ocr）
+RUN npm install -g @alibaba-group/open-code-review \
+ && ocr version
+
+USER sandbox
+WORKDIR /home/sandbox
+
+CMD ["/bin/bash"]
