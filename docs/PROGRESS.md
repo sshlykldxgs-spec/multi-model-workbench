@@ -47,7 +47,7 @@ P0 骨架已写完并**跑通全部门禁**。P0 之后由 Codex 执行、Claude
       或让 P0 验收路径直接死掉。完整清单见下方
 - [ ] 仍待人工验收（必须你亲手点）：登录 → 选 mock 模型发一句话 → 看到**逐字**输出
 - [ ] 沙箱验证待做（需 Docker，本机未装）：`sandbox/verify-ocr.sh`
-- [ ] `frontend/src/api/schema.d.ts` 仍是手写占位，需在后端运行时跑 `npm run gen:api`
+- [x] **`schema.d.ts` 已由 OpenAPI 真实生成**（2026-10-14）：起后端 → `npx openapi-typescript` → 覆盖手写占位。生成 805 行，含 13 条接口路径、12 个 schema（`MeResponse` / `ModelInfo` 均在，`client.ts` 的类型索引未破），`tsc` / `eslint` / `vite build` 复跑全绿
 
 ## 已修复的缺陷（18 个，全部靠"真的跑一遍"发现）
 
@@ -148,7 +148,7 @@ R-3 的真实规则是"**直接** import 才受限"，`import-linter` 表达不�
 - [ ] **用户执行**：人工点击验收（P0 原文要求，必须你亲手做）
 - [ ] **用户执行**：装 Docker，跑 `sandbox/verify-ocr.sh`
 - [ ] **P4 前**：升级 Git 到 ≥2.41（现在是 2.39.5）
-- [ ] 后端运行时跑 `npm run gen:api`，覆盖手写占位的 `schema.d.ts`
+- [x] ~~后端运行时跑 `npm run gen:api`~~ 已完成
 
 ## 远程仓库（A-38）
 
@@ -190,7 +190,7 @@ cd /Users/pengxuezhi/项目蓝图2.0/multi-model-workbench && gh repo create mul
 |---|------|------|
 | 1 | 写回与提 PR 超出蓝图原范围，权限模型与沙箱要相应改动 | **已缓解**：用户确认分阶段（P4-A 只读 / P4-B 写回），见 D-1 |
 | 16 | ~~P0 代码从未运行过~~ | **已解决**：门禁全绿，实测发现并修掉 18 个缺陷 |
-| 17 | `frontend/src/api/schema.d.ts` 目前是**手写占位**，非 OpenAPI 生成 | 需在后端运行时跑 `npm run gen:api` 覆盖。这是 P0 剩下的最后一项技术工作 |
+| 17 | ~~`schema.d.ts` 是手写占位~~ | **已解决**：已由 OpenAPI 真实生成（805 行 / 13 条路径 / 12 个 schema）。**注意**：接口一旦变更必须重跑 `npm run gen:api`，不要手工改这个文件 |
 | 2 | 预算上限无具体默认值，首次部署需补一个保守值 | 不阻塞，上线前定 |
 | 3 | MAF 预览期教程与 1.0 文档写法不一致（例如会话的叫法） | 代码必须对照 1.x 官方文档与 samples，并锁定版本 |
 | 4 | 官方检查点示例只有内存与文件存储，无 Postgres 实现 | P4 需自研数据库检查点存储 |

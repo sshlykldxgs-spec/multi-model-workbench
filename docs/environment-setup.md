@@ -159,7 +159,7 @@ npm run dev
 npm run gen:api
 ```
 
-这会覆盖 `src/api/schema.d.ts`（目前是占位文件）。
+这会覆盖 `src/api/schema.d.ts`。**该文件已由 OpenAPI 生成，接口变更后必须重跑，不要手改。**
 
 ---
 
