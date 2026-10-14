@@ -15,6 +15,11 @@ dist/
 .vite/
 *.tsbuildinfo
 
+# 测试产物（Playwright 的报告与追踪）
+test-results/
+playwright-report/
+blob-report/
+
 # 环境与密钥 —— 绝不入库
 .env
 .env.*

@@ -1,4 +1,7 @@
-import { defineConfig } from 'playwright';
+// 必须从 @playwright/test 导入：playwright 包只导出浏览器驱动
+// （chromium/firefox/webkit 等），不含测试运行器。
+// 实测用 'playwright' 会直接报 does not provide an export named 'defineConfig'。
+import { defineConfig } from '@playwright/test';
 
 /**
  * 端到端烟雾测试配置。

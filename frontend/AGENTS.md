@@ -37,6 +37,9 @@
 
 ```bash
 npm run typecheck && npm run lint && npm run test:e2e:smoke
+# 注意：test:e2e:smoke 需要后端已在 8000 端口运行
+# （vite 把 /api 代理到 :8000，Playwright 只自动起前端）。
+# 先跑：cd ../backend && uv run uvicorn app.main:app --port 8000
 ```
 
 另需"生成的类型与契约一致"检查（契约变更后重新生成）。

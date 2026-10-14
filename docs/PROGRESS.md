@@ -108,6 +108,16 @@ P0 骨架已写完并**跑通全部门禁**。P0 之后由 Codex 执行、Claude
 | 前端 1 类型 | `tsc --noEmit` | exit 0 |
 | 前端 2 检查 | `eslint . --max-warnings 0` | exit 0 |
 | 前端 3 构建 | `vite build` | exit 0 |
+| 前端 4 端到端 | `npm run test:e2e:smoke` | **1 passed**（见下） |
+
+**端到端烟雾测试现在真的能跑，而且真的在测流式**：
+此前它跑不起来 —— `smoke.spec.ts` 与 `playwright.config.ts` 都从 `playwright` 包
+导入 `defineConfig` / `test` / `expect`，但那个包只导出浏览器驱动（chromium 等），
+测试运行器在 `@playwright/test` 里，而它**没被声明为依赖**（缺陷 19）。
+
+另外原来的断言只用 `toContainText`，**无法区分流式与一次性返回** —— 后端一次吐整段也会通过。
+现在改成按 20ms 采样气泡文本，要求观察到 ≥3 个长度递增的中间态，
+且至少一个是最终文本的真前缀。实测通过，所以 P0 的「逐字输出」是被真正验证的。
 
 **关于 4a 与 4b 的分工（重要）**：`import-linter` 开启 `include_external_packages`
 后会**追踪传递依赖链**，于是 `app.core.deps`（只 import 了我们自己的 registry）
