@@ -279,6 +279,10 @@ YAML 声明字段、Skills 机制与稳定状态、各连接器是否支持自�
 
 ### P0 的真实状态（重要，不要误报为已完成）
 
+> ⏱ **本节是第十轮之前的历史记录。** P0 后来已由指挥方跑通全部门禁
+> （27/27 测试通过，修掉 18 个缺陷），因此下文的「未验证」结论**已作废**。
+> 最新状态见 `docs/PROGRESS.md` 与本文第二十节。
+
 P0 代码已由 Claude 写完：后端 56 个文件约 2,900 行，前端 7 个文件约 685 行。
 但**从未执行过** —— 编写方所在环境网络受限，`pytest-asyncio`、`anthropic`、
 `google-genai` 装不上，测试一次都没跑过。
@@ -429,3 +433,57 @@ Codex 执行 → 按「回执模板」填写 → 用户把回执粘回给指挥�
 - 是否碰了铁律，尤其 R-1（MAF 只在编排层）与 R-3（模型调用必经 Gateway）
 - 契约与实现是否一致
 - 测试是否在测行为，而非迁就实现
+
+---
+
+## 二十、第十轮：技能安装与验证结果（2026-10-14）
+
+### 20.1 待你确认的三项（已答）
+
+| # | 问题 | 答复 |
+|---|------|------|
+| 1 | 装哪些技能 | webapp-testing、feature-dev、mcp-builder、Superpowers |
+| 2 | 装到哪里 | **只装本机**（user 作用域） |
+| 3 | Codex 侧要不要配 | **不装**，只给项目自己的规范文件 |
+
+### 20.2 新增决策
+
+| 编号 | 决策 | 理由 |
+|------|------|------|
+| A-40 | 技能只装 **user 作用域**，不进项目仓库；Codex 侧不装通用技能 | 项目级会随仓库分发给团队，需先验证；Codex 的 skill 格式与加载机制和 Claude 不同，不能照搬（见 `docs/skills-candidates.md` 第四节） |
+| A-41 | **分层与 SDK 位置改为 AST 自定义门禁**（`app/scripts/check_layering.py`），`import-linter` 只保留"层内方向"一条契约 | `import-linter` 开启 `include_external_packages` 后追踪传递链，对 R-3 产生**系统性误报**（实测 `app.api` 与 `app.core` 全部中招）。R-3 的真实语义是"直接 import 才受限"，只能自己写 AST 检查 |
+
+### 20.3 已安装（本机 user 作用域）
+
+| 名称 | 来源 | 版本 | 内容 |
+|------|------|------|------|
+| `example-skills` | `anthropic-agent-skills`（官方 `anthropics/skills`） | `dbd4588f9e10` | **12 个**技能：webapp-testing、mcp-builder、skill-creator、frontend-design、web-artifacts-builder、algorithmic-art、brand-guidelines、canvas-design、doc-coauthoring、internal-comms、slack-gif-creator、theme-factory |
+| `feature-dev` | `claude-plugins-official` | `8bd00f08f0b0` | 7 阶段开发流程 + 三个子智能体（code-explorer / code-architect / code-reviewer） |
+| `superpowers` | `claude-plugins-official`（社区 obra，MIT） | `6.4.1` | TDD + 子智能体执行 + 任务间审查的方法论 |
+
+**⚠️ 执行偏差，需你知情**：你勾了 `webapp-testing` 与 `mcp-builder` 两个技能，
+但官方把它们**打包在 `example-skills` 一个插件里**，该市场没有单独发布这两个。
+所以装入的是**整个 12 技能包**。常驻开销约 **939 token**（每会话固定付出；
+未触发的技能不加载正文）。**当前未做任何裁剪**，等你定。
+
+### 20.4 环境版本（实测）
+
+| 项 | 版本 |
+|----|------|
+| Python | 3.12.8 |
+| Node / npm | 24.21.0 / 11.19.0 |
+| git | 2.39.5（**低于 OpenCodeReview 要求的 2.41，P4 前必须升**） |
+| uv | 0.13.0 |
+| ruff / pyright / pytest | 0.17.0 / 1.1.414 / 9.1.1 |
+| **agent-framework** | **1.21.0** ← 解决了"各源版本号矛盾"那条风险 |
+
+### 20.5 P0 验证结论
+
+**六道后端门禁 + 三道前端门禁全部通过，`pytest` 27/27 全绿。**
+修复 18 个缺陷，其中 4 个会让应用完全无法启动或让 P0 验收路径直接死掉。
+完整清单见 `docs/PROGRESS.md`。
+
+**仍未完成**（都无法在指挥方环境内完成，已交给执行方）：
+1. **人工点击验收** —— 需在浏览器亲手点（P0 验收原文要求）。
+2. **`npm run gen:api`** —— 覆盖手写占位的 `schema.d.ts`。
+3. **沙箱验证** —— 需 Docker，本机未装。

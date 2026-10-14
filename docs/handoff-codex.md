@@ -58,7 +58,7 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 
 ## 四、阶段任务拆分
 
-### P0 · 脚手架与契约（状态：代码已由 Claude 写完，**未验证**）
+### P0 · 脚手架与契约（状态：**门禁已全绿，27/27 测试通过**；余人工验收与沙箱验证）
 
 见第五节"P0 收尾"。P0 的验收标准（蓝图第 11 节）：
 > 打开前端页面，选 mock 模型发一句话，看到逐字输出；打开接口文档页，能看到全部接口。
@@ -164,45 +164,56 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 
 ## 五、P0 收尾（执行方第一件事）
 
-P0 的代码已写好（后端 56 个文件约 2,900 行，前端 7 个文件约 685 行）。
+> **2026-10-14 更新：P0 的验证已由指挥方完成。** 工具链装齐后,
+> 六道后端门禁与三道前端门禁**全部通过**，`pytest` **27/27 全绿**。
+> 过程中发现并修复 **18 个缺陷**（清单见 `docs/PROGRESS.md`）。
+>
+> 因此原来的 P0-V1 / V2 / V3 / V6 **已完成，不要再做**。
+> **执行方只剩三件事**：人工点击验收、生成真实 API 类型、沙箱验证。
 
-**真实状态：部分验证。** 编写方环境里 `pypi.org` 与 `registry.npmjs.org` 均被沙箱拒绝，
-所以：
+P0 代码规模：后端 63 文件 / 3302 行，前端 7 文件 / 687 行。
 
-| 已做 | 未做 |
-|------|------|
-| `compileall` 与 AST 语法检查：**全部通过** | 完整测试套件（缺 `email-validator`） |
-| **13 个测试实际跑过并全部通过**（`test_logging` / `test_gateway` / `test_workflow_spec`） | 其余 14 个测试（`test_health` / `test_auth` / `test_models` / `test_runs`） |
-| 三个真实缺陷已发现并修复（见下） | `ruff` / `pyright` / `lint-imports` 从未跑过 |
-| 前端依赖从未安装，`tsc` 从未运行 | 端到端验收（点一遍）从未做 |
+### 门禁现状（无需重跑，除非你改了代码）
 
-**已修复的三个缺陷**（都是"跑一遍才发现"的类型，说明验证不可跳过）：
+| 门禁 | 命令 | 结果 |
+|------|------|------|
+| 1 格式 | `uv run ruff format --check .` | 64 files already formatted |
+| 2 代码检查 | `uv run ruff check .` | All checks passed |
+| 3 类型检查 | `uv run pyright` | 0 errors, 0 warnings |
+| 4a 层内方向 | `uv run lint-imports` | 1 kept, 0 broken |
+| 4b SDK 位置 | `uv run python -m app.scripts.check_layering` | 通过 |
+| 5 单元测试 | `uv run pytest -q` | 27 passed |
+| 6 契约一致性 | `uv run python -m app.scripts.check_contract` | 通过 |
+| 前端 1 | `npm run typecheck` | exit 0 |
+| 前端 2 | `npm run lint` | exit 0 |
+| 前端 3 | `npm run build` | exit 0 |
 
-1. **`HTTP_422_UNPROCESSABLE_ENTITY` 已弃用** —— 本机 starlette 1.7.0 下会发
-   `StarletteDeprecationWarning`，而 `pyproject.toml` 配了 `filterwarnings=error`，
-   于是**整个应用无法导入**。改为字面量状态码（契约里写的就是数字）。
-2. **协议适配器急切导入** —— `protocols/__init__.py` 一口气 import 三个适配器，
-   导致"只用 mock"也必须装齐 `anthropic` 与 `google-genai`。
-   改为 PEP 562 惰性导入 + 注册表只处理**启用中**条目涉及的协议。
-   这个缺陷会让 P0 的 mock 验收路径本身跑不起来。
-3. **漏声明 `email-validator`** —— `schemas/auth.py` 用了 `EmailStr`，
-   但依赖里没写 `pydantic[email]`，导致 `app.main` 完全无法导入。
-   已改为 `pydantic[email]>=2.9`。
-
-执行方要做的：
+### 执行方剩余的三件事
 
 | # | 事项 | 验收 |
 |---|------|------|
-| P0-V1 | `cd backend && uv sync --extra dev` | 依赖装齐 |
-| P0-V2 | 跑四道门禁 | **必须全绿**；红了就修，修完再跑 |
-| P0-V3 | `uv run pytest -q` | 全部测试通过（现有 20 个测试） |
-| P0-V4 | 起后端 + 起前端，手工走一遍 | 选 mock 模型发一句话，**看到逐字输出** |
-| P0-V5 | `cd frontend && npm install && npm run gen:api` | 覆盖 `src/api/schema.d.ts` 占位文件 |
-| P0-V6 | `npm run typecheck && npm run lint` | 全绿 |
-| P0-V7 | 跑 `sandbox/verify-ocr.sh`（需先装 Docker） | Git ≥2.41、无外网、`ocr review --preview` 成功 |
+| P0-V4 | 起后端 + 起前端，**在浏览器里亲手走一遍** | 登录 → 选 mock 模型发一句话 → **看到逐字输出**（不是整段蹦出来）。详见 `docs/tasks/P0-收尾.md` 步骤 4 |
+| P0-V5 | `cd frontend && npm run gen:api && npm run typecheck && npm run lint` | 覆盖手写占位的 `src/api/schema.d.ts`，且门禁仍全绿 |
+| P0-V7 | 装 Docker 后跑 `sandbox/verify-ocr.sh` | Git ≥2.41、**容器内访问外网必须失败**、`ocr review --preview` 成功 |
 
-**P0-V2 与 P0-V3 大概率会有问题** —— 未执行的代码一定有错，这正常，修掉即可。
-修 bug 时**不许改测试来迁就实现**，除非测试本身写错了。
+### 已修复的 18 个缺陷（**不要再"重新修"一遍**）
+
+按类型分五类，完整表在 `docs/PROGRESS.md`。特别注意两条容易重犯的：
+
+1. **mock 条目不得要求厂商凭据** —— 注册表必须跳过 id 以 `mock` 开头的条目。
+   否则启动时强制要求 OpenAI 密钥，mock 验收路径直接死。
+2. **`get_current_user` 必须查真实角色** —— 不能硬编码 `UserRole.MEMBER`，
+   否则管理员登录后被识别成成员。
+
+### 两条与门禁有关的约定（改代码时会遇到）
+
+- **厂商 SDK 位置由 AST 门禁查，不由 `import-linter` 查**。
+  `import-linter` 开启 `include_external_packages` 会追踪传递链，
+  对 R-3 系统性误报（`app.api` 与 `app.core` 全中）。
+  真实规则是"**直接** import 才受限"，由 `app/scripts/check_layering.py` 负责。
+- **`RUF001/2/3` 已在 `pyproject.toml` 里忽略**。
+  它们把中文全角标点当"易混淆 Unicode 字符"，本项目注释刻意用中文标点，
+  实测 497 个错误里 481 个是它们。**不要为了消警去改中文标点。**
 
 ---
 

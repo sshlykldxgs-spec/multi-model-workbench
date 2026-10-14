@@ -154,6 +154,44 @@ npm install -g @alibaba-group/open-code-review
 
 ---
 
+## 五点五、安装结果（2026-10-14）
+
+**已按你的批准安装（全部为 user 作用域，未进项目仓库）：**
+
+| 项 | 结果 |
+|----|------|
+| `example-skills@anthropic-agent-skills` | ✔ 已装。**含 12 个技能**，覆盖你要的 `webapp-testing` 与 `mcp-builder` |
+| `feature-dev@claude-plugins-official` | ✔ 已装（含 `code-architect` 子智能体，对应"框架设计"） |
+| `superpowers@claude-plugins-official` | ✔ 已装（社区 obra，MIT，版本 6.4.1） |
+
+**⚠️ 实际偏差**：`webapp-testing` 与 `mcp-builder` **没有独立插件形式**，
+官方把它们放在 `example-skills` 这一个包里，所以只能**整包安装 12 个技能**，
+不是你以为的两个。常驻开销约 **939 token**。已登记在 `docs/decisions.md` 20.3。
+
+**Codex 侧按要求未装任何技能**，只给它项目自己的规范文件
+（`AGENTS.md`、`docs/tasks/*.md`）。
+
+**回滚方式**
+
+```bash
+claude plugin disable superpowers
+```
+
+```bash
+claude plugin uninstall example-skills
+```
+
+```bash
+claude plugin marketplace remove anthropic-agent-skills
+```
+
+**若想把 939 token 的常驻开销再压**：`example-skills` 里多数技能与本项目无关
+（slack-gif-creator、theme-factory、brand-guidelines、algorithmic-art 等）。
+可禁用整包后，只把 `webapp-testing`、`mcp-builder`、`skill-creator` 三个技能目录
+复制到 `~/.claude/skills/` 按需加载。**当前未做此裁剪**，等你定。
+
+---
+
 ## 六、安装前必须向你确认的三点
 
 1. **Superpowers 装不装？** 它功能最强，但会强推自己的方法论，
