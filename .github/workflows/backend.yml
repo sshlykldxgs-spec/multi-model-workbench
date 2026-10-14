@@ -42,7 +42,7 @@ jobs:
       - name: 安装依赖
         run: uv sync --extra dev
 
-      # 蓝图第 10 节：四道门禁，任一不过不算完成。
+      # 蓝图第 10 节要求门禁不过不算完成。这里是七道，任一不过即失败。
       - name: 门禁 1 · 格式
         run: uv run ruff format --check .
 
@@ -52,11 +52,21 @@ jobs:
       - name: 门禁 3 · 类型检查
         run: uv run pyright
 
-      - name: 门禁 4 · 分层契约（R-1 / R-3）
+      # 门禁 4 与 5 是**两道**，缺一不可：
+      #   lint-imports 查层内依赖方向（只看我们自己包之间）
+      #   check_layering 查厂商 SDK 的位置（R-1 的 MAF、R-3 的 openai/anthropic/google）
+      # 为什么不用 lint-imports 一起查外部 SDK：它开启 include_external_packages 后
+      # 会追踪传递依赖链，app.core.deps 只 import 了我们的 registry 却被判成
+      # "import 了 openai"，实测 app.api 与 app.core 全部误报。
+      # 而 R-3 的真实语义是"直接 import 才受限"，只能自己写 AST 检查。
+      - name: 门禁 4 · 分层依赖方向
         run: uv run lint-imports
 
-      - name: 门禁 5 · 单元测试
+      - name: 门禁 5 · 厂商 SDK 与 MAF 的位置（R-1 / R-3）
+        run: uv run python -m app.scripts.check_layering
+
+      - name: 门禁 6 · 单元测试
         run: uv run pytest -q
 
-      - name: 门禁 6 · OpenAPI 与契约一致
+      - name: 门禁 7 · OpenAPI 与契约一致
         run: uv run python -m app.scripts.check_contract

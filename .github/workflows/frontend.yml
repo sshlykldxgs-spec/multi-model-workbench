@@ -42,3 +42,71 @@ jobs:
 
       - name: 门禁 3 · 构建
         run: npm run build
+
+  # 端到端烟雾测试单独一个 job：它需要后端在跑（vite 把 /api 代理到 :8000），
+  # 而那要装 Python 依赖，混进上面那个 job 会拖慢纯前端的三道门禁。
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---------- 后端：装依赖并起在 8000 ----------
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 安装后端依赖
+        working-directory: backend
+        run: uv sync --extra dev
+
+      - name: 起后端（后台）
+        working-directory: backend
+        env:
+          # 不依赖 .env（它被 gitignore）。P0 的验收路径只用 mock，
+          # 不碰数据库，所以这里不启 postgres 服务。
+          SESSION_SECRET: ci-secret-not-for-production
+          OTEL_EXPORTER_OTLP_ENDPOINT: ""
+        run: |
+          uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health >/dev/null 2>&1; then
+              echo "后端已就绪"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::后端 60 秒内未就绪"
+          exit 1
+
+      # ---------- 前端：装依赖、装浏览器、跑 smoke ----------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 安装 Playwright 浏览器
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # 蓝图第 10 节：前端门禁含"基本的端到端烟雾测试"，
+      # 蓝图第 11 节 P0 的验收就是"选 mock 模型看到逐字输出"。
+      - name: 门禁 4 · 端到端烟雾测试
+        working-directory: frontend
+        run: npm run test:e2e:smoke
+
+      - name: 失败时上传报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7

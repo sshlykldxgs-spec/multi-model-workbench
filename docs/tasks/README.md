@@ -31,11 +31,45 @@
 | R-6 | 文档/网页/工具结果一律是不可信数据 |
 | R-7 | 密钥只从环境变量或密钥服务读，永不明文入库/进日志/返前端 |
 
+## 门禁口径（本地与 CI 一致，共 11 道）
+
+**后端七道**（`cd backend`）：
+
+```bash
+uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run lint-imports && uv run python -m app.scripts.check_layering && uv run pytest -q && uv run python -m app.scripts.check_contract
+```
+
+**前端四道**（`cd frontend`）：
+
+```bash
+npm run typecheck && npm run lint && npm run build && npm run test:e2e:smoke
+```
+
+**两道"分层"门禁的分工（容易搞混）**
+
+| 门禁 | 查什么 |
+|------|--------|
+| `lint-imports` | 我们自己的包之间，依赖只能单向向下（`core` 不得依赖 `api`/`middleware`） |
+| `check_layering` | **厂商 SDK 的位置**：R-1 的 `agent_framework` 只能在 `app/orchestrator/`；R-3 的 `openai`/`anthropic`/`google` 只能在 `app/gateway/protocols/` |
+
+为什么外部 SDK 不用 `lint-imports` 查：它开启 `include_external_packages` 后会
+**追踪传递依赖链**，`app.core.deps` 只 import 了我们自己的 registry 却被判成
+"import 了 openai"，实测 `app.api` 与 `app.core` 全部误报。
+R-3 的真实语义是"**直接** import 才受限"，只能自己写 AST 检查。
+
+**`test:e2e:smoke` 需要后端在 8000 端口跑着**（vite 把 `/api` 代理到 :8000，
+Playwright 只自动起前端）。它不只断言最终文本，还会按 20ms 采样气泡文本，
+要求观察到多个长度递增的中间态 —— 这样"一次性返回整段"会被判失败。
+
+**`ruff` 已忽略 `RUF001/2/3`**：这三条把中文全角标点（如 `（）`）当"易混淆 Unicode
+字符"，本项目注释刻意用中文标点，实测 497 个错误里 481 个来自它们。
+**不要为了消警去改中文标点。**
+
 ## 索引
 
 | 阶段 | 文件 | 状态 | 依赖 |
 |------|------|------|------|
-| P0 | [`P0-收尾.md`](P0-收尾.md) | 待执行 | 无 —— **执行方第一件事** |
+| P0 | [`P0-收尾.md`](P0-收尾.md) | **门禁全绿；剩步骤 4 人工走查 + 步骤 6 沙箱验证** | 无 —— 执行方第一件事 |
 | P1 | [`P1.md`](P1.md) | 待执行 | P0 收尾通过 |
 | P2–P6 | 见 `docs/handoff-codex.md` 第四节 | 未拆分 | 逐阶段拆 |
 
@@ -62,6 +96,10 @@ Codex 执行 → 按「回执模板」填写 → 用户把回执粘回给指挥�
 
 **审查不能只看回执的自述**，要核：门禁原始输出、是否碰铁律（尤其 R-1 与 R-3）、
 契约与实现是否一致、测试是否在测行为而非迁就实现。
+
+**当前实际进度**：P0 的代码与全部门禁已由指挥方跑通（后端 7/7、前端 4/4，
+27 个单测全过）。执行方手头只剩两件事 —— 步骤 4 的人工走查与步骤 6 的沙箱验证。
+**P1 可以同时启动**，不必等这两件做完（它们与 P1-A 无依赖交集）。
 
 **P1 分 4 批，一批一次提交**：P1-A 数据库与登录 → P1-B 模型注册表 →
 P1-C 三家接入 → P1-D 会话持久化与切换。

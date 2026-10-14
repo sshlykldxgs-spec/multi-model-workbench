@@ -93,6 +93,9 @@ P0 骨架已写完并**跑通全部门禁**。P0 之后由 Codex 执行、Claude
 | 4 | 前端 CI 用 `npm ci` 但没有 `package-lock.json` | **CI 从第一次运行就必挂** |
 | 6 | `design.md` 第 12 节子节乱序，`12.9` 误用二级标题 | 出现两个 `## 12.`。重排时还丢失了 `12.9.1`（流式不得持有数据库会话那条硬约束），已从 git 历史恢复并逐块核对 |
 | 7 | `.gitignore` 里 `dist/` 重复两次 | 无害，但这是会被复制的模板文件 |
+| 19 | **e2e 门禁从未能运行**：`smoke.spec.ts` 与 `playwright.config.ts` 从 `playwright` 包导入 `defineConfig`/`test`/`expect`，但该包只导出浏览器驱动，运行器在 `@playwright/test` 里，而它未声明为依赖 | 端到端门禁形同虚设 |
+| 20 | **原 e2e 断言证明不了流式**：只用 `toContainText` 检查最终文本，后端一次返回整段同样通过 | P0 的核心要求「看到逐字输出」实际未被测到。改为按 20ms 采样，要求 ≥3 个递增中间态 |
+| 21 | **CI 门禁与本地不一致**：`backend.yml` 只有六道，缺 `check_layering` | **R-1 与 R-3 的 SDK 位置在 CI 里完全没查** —— 本地红、CI 绿，比没门禁更危险 |
 
 ## 门禁现状（2026-10-14 实测全绿）
 
@@ -101,13 +104,14 @@ P0 骨架已写完并**跑通全部门禁**。P0 之后由 Codex 执行、Claude
 | 1 格式 | `ruff format --check .` | 64 files already formatted |
 | 2 代码检查 | `ruff check .` | All checks passed |
 | 3 类型检查 | `pyright` | 0 errors, 0 warnings |
-| 4a 层内方向 | `lint-imports` | 1 kept, 0 broken |
-| 4b SDK 位置 | `python -m app.scripts.check_layering` | 通过 |
-| 5 单元测试 | `pytest -q` | **27 passed** |
-| 6 契约一致性 | `python -m app.scripts.check_contract` | 通过（11 条 P0 接口） |
+| 4 分层依赖方向 | `lint-imports` | 1 kept, 0 broken |
+| 5 SDK 位置（R-1/R-3） | `python -m app.scripts.check_layering` | 通过 |
+| 6 单元测试 | `pytest -q` | **27 passed** |
+| 7 契约一致性 | `python -m app.scripts.check_contract` | 通过（11 条 P0 接口） |
 | 前端 1 类型 | `tsc --noEmit` | exit 0 |
 | 前端 2 检查 | `eslint . --max-warnings 0` | exit 0 |
 | 前端 3 构建 | `vite build` | exit 0 |
+| 前端 4 端到端 | `npm run test:e2e:smoke` | **1 passed**（含真实的流式中间态断言） |
 | 前端 4 端到端 | `npm run test:e2e:smoke` | **1 passed**（见下） |
 
 **端到端烟雾测试现在真的能跑，而且真的在测流式**：
@@ -156,7 +160,7 @@ R-3 的真实规则是"**直接** import 才受限"，`import-linter` 表达不�
 - [ ] **用户执行**：`gh auth login`（当前未登录，无法建远程仓）
 - [ ] **用户执行**：在 GitHub 建私有仓（命令见「远程仓库」一节）
 - [ ] **用户执行**：人工点击验收（P0 原文要求，必须你亲手做）
-- [ ] **用户执行**：装 Docker，跑 `sandbox/verify-ocr.sh`
+- [ ] **用户执行**：装 Docker 后告知，由指挥方跑 `sandbox/verify-ocr.sh` 并审查结果（A-44）
 - [ ] **P4 前**：升级 Git 到 ≥2.41（现在是 2.39.5）
 - [x] ~~后端运行时跑 `npm run gen:api`~~ 已完成
 
