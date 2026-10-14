@@ -37,6 +37,4 @@ class EventName:
     RUN_COMPLETED = "run.completed"
 
 
-TERMINAL_STATUSES = frozenset(
-    {RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED}
-)
+TERMINAL_STATUSES = frozenset({RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED})

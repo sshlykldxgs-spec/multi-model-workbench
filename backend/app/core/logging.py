@@ -48,8 +48,7 @@ def sanitize(obj: Any) -> Any:
     """递归脱敏。用于日志与审计载荷。"""
     if isinstance(obj, dict):
         return {
-            k: (MASK if _is_sensitive(str(k)) else sanitize(_mask_value(v)))
-            for k, v in obj.items()
+            k: (MASK if _is_sensitive(str(k)) else sanitize(_mask_value(v))) for k, v in obj.items()
         }
     if isinstance(obj, (list, tuple)):
         return [sanitize(v) for v in obj]
@@ -80,3 +79,13 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
+
+
+def get_logger(name: str) -> logging.Logger:
+    """取一个模块级 logger。
+
+    存在的意义是让各模块统一走这里，而不是各自 `logging.getLogger(__name__)` ——
+    这样将来要换 handler、加过滤器或改级别，只改一处。
+    configure_logging() 负责配置根 logger，本函数只负责取名。
+    """
+    return logging.getLogger(name)

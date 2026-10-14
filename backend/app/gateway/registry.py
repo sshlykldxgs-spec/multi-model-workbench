@@ -81,8 +81,15 @@ def build_default_registry(
     registry = AdapterRegistry(credentials)
     # 只处理**启用中**条目涉及的协议：停用的条目不该成为硬依赖，
     # 否则一个停用的 Gemini 条目会要求装 google-genai 才能启动。
-    materialized = [e for e in entries if e.enabled]
+    #
+    # 另外必须排除 mock 条目：resolve() 在查适配器之前就先按 id 前缀命中 mock，
+    # 所以 mock 根本不需要真实适配器。不排除的话，一个启用的 mock 条目
+    # （它声明为 openai_compat 协议）会强迫启动时必须有 OpenAI 凭据 ——
+    # 实测后果是 P0 的 mock 验收路径完全跑不起来。
+    materialized = [e for e in entries if e.enabled and not e.id.startswith("mock")]
     protocols = {e.protocol for e in materialized}
+    if not protocols:
+        return registry
     for protocol in protocols:
         try:
             registry.register(_build_adapter(protocol, credentials, protocols))

@@ -34,7 +34,9 @@ class WorkflowSpec:
     require_plan_approval: bool = True
 
 
-def validate_spec(spec: WorkflowSpec, available_tools: set[str], available_kb: set[str]) -> list[str]:
+def validate_spec(
+    spec: WorkflowSpec, available_tools: set[str], available_kb: set[str]
+) -> list[str]:
     """发布前校验（design.md 7.4）。
 
     返回问题清单，空列表表示通过。孤立节点、循环未设最大轮数、

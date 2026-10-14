@@ -68,7 +68,7 @@ def openapi_paths() -> set[str]:
 
 
 def is_deferred(path: str) -> bool:
-    return any(path == p or path.startswith(p + "/") or path.startswith(p) for p in P0_DEFERRED_PREFIXES)
+    return any(path == p or path.startswith(p) for p in P0_DEFERRED_PREFIXES)
 
 
 def main() -> int:
@@ -81,7 +81,8 @@ def main() -> int:
 
     # 契约里的 `/conversations/{id}` 单会话操作（GET/PATCH/DELETE）也在 P1-D。
     # 这里按"实现了列表就算 P0 完成"处理，单会话操作归入 deferred。
-    p0_declared = {p for p in declared if not is_deferred(p) and p != "/api/v1/conversations/{param}"}
+    single_convo = "/api/v1/conversations/{param}"
+    p0_declared = {p for p in declared if not is_deferred(p) and p != single_convo}
 
     missing = sorted(p for p in p0_declared if p not in implemented)
     extra = sorted(p for p in implemented if p not in declared)

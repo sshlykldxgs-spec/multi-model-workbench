@@ -8,9 +8,12 @@
   3. 绝不依赖环境变量推断端点（Azure 与 OpenAI 变量并存时优先 OpenAI）。
 """
 
+import logging
 from collections.abc import AsyncIterator
+from typing import Any, cast
 
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 from app.core.errors import ApiError, ErrorCode
 from app.gateway.base import (
@@ -22,6 +25,24 @@ from app.gateway.base import (
     ProviderAdapter,
     Usage,
 )
+
+logger = logging.getLogger(__name__)
+
+#: 我们的中性角色名 → OpenAI 协议的角色名。
+#: 中性格式是历史的唯一事实来源（ADR-0002），协议差异在这一层吸收。
+_SDK_ROLES = {
+    "system": "system",
+    "user": "user",
+    "assistant": "assistant",
+    "tool": "tool",
+}
+
+
+def _sdk_role(role: str) -> Any:
+    mapped = _SDK_ROLES.get(role)
+    if mapped is None:
+        raise ApiError(ErrorCode.VALIDATION_FAILED, f"不支持的消息角色：{role}")
+    return mapped
 
 
 def _normalize_base_url(url: str | None) -> str | None:
@@ -63,7 +84,13 @@ class OpenAICompatAdapter(ProviderAdapter):
         try:
             stream = await client.chat.completions.create(
                 model=entry.model,
-                messages=[{"role": m.role, "content": m.content} for m in req.messages],
+                messages=[
+                    cast(
+                        ChatCompletionMessageParam,
+                        {"role": _sdk_role(m.role), "content": m.content},
+                    )
+                    for m in req.messages
+                ],
                 temperature=req.temperature,
                 max_tokens=req.max_tokens,
                 stream=True,
@@ -97,6 +124,9 @@ class OpenAICompatAdapter(ProviderAdapter):
             client = self._client(entry)
             await client.models.list()
             caps.add(Capability.TOOL_CALLING)
-        except Exception:
-            pass
+        except Exception as exc:
+            # 探测失败是可接受的：A-17 明确「自动探测只作建议值，管理员可覆盖」。
+            # 中转站常常不实现 /models，这里静默降级而不是让整个条目不可用。
+            # 记录 debug 日志以便排查，但不抛出。
+            logger.debug("能力探测失败（条目 %s）：%s", entry.id, exc)
         return caps

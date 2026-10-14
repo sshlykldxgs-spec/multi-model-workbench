@@ -1,4 +1,11 @@
-"""依赖注入。把 GatewayService、注册表与策略挂在 app.state 上，便于测试替换。"""
+"""API 层的依赖注入。
+
+**为什么在 api 层而不是 core**：本模块是「组装根」，它同时 import 了
+gateway（取网关与注册表）与 middleware.policies（取策略接口）。
+若放在 app/core/ 下，core 就会反向依赖 middleware ——
+实测被分层门禁判为「下层依赖上层」。
+core 应当是最底层的基础设施（配置、日志、错误），不含组装逻辑。
+"""
 
 from fastapi import Request
 

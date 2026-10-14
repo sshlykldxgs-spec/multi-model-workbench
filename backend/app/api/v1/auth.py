@@ -6,8 +6,8 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from fastapi import APIRouter, Depends, Request, Response
 
+from app.api.deps import get_rate_limit_policy
 from app.core.config import get_settings
-from app.core.deps import get_rate_limit_policy
 from app.core.errors import ApiError, ErrorCode
 from app.middleware.auth import get_current_user, issue_session
 from app.middleware.policies.base import RateLimitPolicy
@@ -40,9 +40,7 @@ async def login(
 
     # 登录限流（蓝图第 8 节）。P0 用进程内实现，多 worker 需换共享存储。
     client_ip = request.client.host if request.client else "unknown"
-    decision = await rate_limit.check(
-        f"login:{client_ip}", settings.login_rate_limit_per_minute
-    )
+    decision = await rate_limit.check(f"login:{client_ip}", settings.login_rate_limit_per_minute)
     if not decision.allowed:
         raise ApiError(ErrorCode.RATE_LIMITED, "登录尝试过于频繁，请稍后再试")
 
@@ -54,14 +52,16 @@ async def login(
         # 不区分「邮箱不存在」与「密码错误」，避免账号枚举。
         raise ApiError(ErrorCode.UNAUTHORIZED, "邮箱或密码不正确")
 
-    user_id = "bootstrap-admin"
+    from app.main import BOOTSTRAP_ADMIN_ID
+
+    user_id = BOOTSTRAP_ADMIN_ID
     token = issue_session(user_id, settings)
     response.set_cookie(
         settings.session_cookie_name,
         token,
         max_age=settings.session_max_age_seconds,
-        httponly=True,          # 蓝图第 8 节硬要求
-        samesite="lax",         # 蓝图第 8 节硬要求
+        httponly=True,  # 蓝图第 8 节硬要求
+        samesite="lax",  # 蓝图第 8 节硬要求
         secure=settings.cookie_secure,
         path="/",
     )

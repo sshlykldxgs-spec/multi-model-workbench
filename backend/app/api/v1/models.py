@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 
-from app.core.deps import get_registry
+from app.api.deps import get_registry
 from app.core.errors import ApiError, ErrorCode
 from app.gateway.base import Capability, ModelEntry, Protocol
 from app.gateway.registry import AdapterRegistry

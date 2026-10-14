@@ -16,15 +16,16 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 
-from app.core.deps import get_budget_policy
+from app.api.deps import get_budget_policy
 from app.core.errors import ApiError, ErrorCode
 from app.gateway.base import ChatMessage, ChatRequest, ModelEntry
 from app.gateway.service import GatewayService
 from app.middleware.auth import get_current_user
 from app.middleware.policies.base import BudgetPolicy, PolicyContext
 from app.models.enums import RunStatus
+from app.schemas.auth import CurrentUser
 from app.schemas.chat import RunCreate, RunOut
-from app.schemas.events import EventName, EventEnvelope
+from app.schemas.events import EventEnvelope, EventName
 
 router = APIRouter()
 
@@ -34,13 +35,14 @@ _EVENTS: dict[str, list[EventEnvelope]] = {}
 _CANCELLED: set[str] = set()
 
 
+def _fallback_notice(from_label: str, to_label: str) -> str:
+    """降级告知文案（A-18：降级必须告知用户，绝不静默换模型）。"""
+    return f"（上游 {from_label} 不可用，已降级到 {to_label}）\n"
+
+
 def _sse(event: EventEnvelope) -> str:
     """SSE 帧。id 用序号，前端据此续传（契约第 12 节）。"""
-    return (
-        f"event: {event.event}\n"
-        f"id: {event.seq}\n"
-        f"data: {event.model_dump_json()}\n\n"
-    )
+    return f"event: {event.event}\nid: {event.seq}\ndata: {event.model_dump_json()}\n\n"
 
 
 def _next_seq(run_id: str) -> int:
@@ -132,7 +134,9 @@ async def start_run(
                             EventName.MESSAGE_DELTA,
                             {
                                 "message_id": message_id,
-                                "text": f"（上游 {chunk.fallback_from} 不可用，已降级到 {entry.provider_label or entry.id}）\n",
+                                "text": _fallback_notice(
+                                    chunk.fallback_from, entry.provider_label or entry.id
+                                ),
                             },
                         )
                     )
@@ -180,7 +184,11 @@ async def start_run(
                 _emit(
                     run_id,
                     EventName.RUN_FAILED,
-                    {"status": str(RunStatus.FAILED), "error_code": str(exc.code), "message": exc.message},
+                    {
+                        "status": str(RunStatus.FAILED),
+                        "error_code": str(exc.code),
+                        "message": exc.message,
+                    },
                 )
             )
 
@@ -189,7 +197,7 @@ async def start_run(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   # 关掉 Caddy/nginx 的缓冲，否则流式会被攒起来
+            "X-Accel-Buffering": "no",  # 关掉 Caddy/nginx 的缓冲，否则流式会被攒起来
             "Connection": "keep-alive",
         },
     )

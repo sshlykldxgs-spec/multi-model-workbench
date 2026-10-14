@@ -17,10 +17,20 @@ def test_cost_uses_entry_price_not_model_name() -> None:
     svc = _service([])
     from app.gateway.base import Usage
 
-    cheap = ModelEntry(id="a", protocol=Protocol.OPENAI_COMPAT, model="gpt-4o",
-                       input_price_per_mtok=1.0, output_price_per_mtok=2.0)
-    pricey = ModelEntry(id="b", protocol=Protocol.OPENAI_COMPAT, model="gpt-4o",
-                        input_price_per_mtok=10.0, output_price_per_mtok=20.0)
+    cheap = ModelEntry(
+        id="a",
+        protocol=Protocol.OPENAI_COMPAT,
+        model="gpt-4o",
+        input_price_per_mtok=1.0,
+        output_price_per_mtok=2.0,
+    )
+    pricey = ModelEntry(
+        id="b",
+        protocol=Protocol.OPENAI_COMPAT,
+        model="gpt-4o",
+        input_price_per_mtok=10.0,
+        output_price_per_mtok=20.0,
+    )
     usage = Usage(input_tokens=1_000_000, output_tokens=1_000_000)
     assert svc.cost_usd(cheap, usage) == pytest.approx(3.0)
     assert svc.cost_usd(pricey, usage) == pytest.approx(30.0)
@@ -38,8 +48,9 @@ def test_capability_check_rejects_streaming_missing() -> None:
 def test_capability_check_rejects_tool_history_on_non_tool_model() -> None:
     """切换模型时提前报错，而不是静默截断历史（design.md 第 4 节）。"""
     svc = _service([])
-    entry = ModelEntry(id="x", protocol=Protocol.OPENAI_COMPAT, model="m",
-                       capabilities={Capability.STREAMING})
+    entry = ModelEntry(
+        id="x", protocol=Protocol.OPENAI_COMPAT, model="m", capabilities={Capability.STREAMING}
+    )
     messages = [
         ChatMessage(role="user", content="查天气"),
         ChatMessage(role="tool", content="晴", tool_call_id="t1"),

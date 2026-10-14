@@ -9,8 +9,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
-from app.models.base import Base
 from app.models import orm  # noqa: F401  必须导入，否则元数据里没有表
+from app.models.base import Base
 
 config = context.config
 if config.config_file_name is not None:

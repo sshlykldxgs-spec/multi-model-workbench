@@ -1,6 +1,7 @@
 """Anthropic 原生协议适配器。"""
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from anthropic import AsyncAnthropic
 
@@ -42,13 +43,24 @@ class AnthropicAdapter(ProviderAdapter):
         ]
         client = self._client(entry)
         try:
-            async with client.messages.stream(
-                model=entry.model,
-                system=system or None,
-                messages=turns,  # type: ignore[arg-type]
-                max_tokens=req.max_tokens or 4096,
-                temperature=req.temperature,
-            ) as stream:
+            # 注意：anthropic 1.13.0 的 messages.stream 已不接受 temperature 参数
+            # （pyright 实测报 No parameter named "temperature"）。
+            # 需要采样温度时走 extra_body，不要直接加参数。
+            extra: dict[str, Any] = {}
+            if req.temperature is not None:
+                extra["temperature"] = req.temperature
+            # system 为空时**必须不传这个参数**：SDK 的类型是
+            # str | Iterable[TextBlockParam] | Omit，显式传 None 不合法。
+            stream_kwargs: dict[str, Any] = {
+                "model": entry.model,
+                "messages": turns,
+                "max_tokens": req.max_tokens or 4096,
+            }
+            if system:
+                stream_kwargs["system"] = system
+            if extra:
+                stream_kwargs["extra_body"] = extra
+            async with client.messages.stream(**stream_kwargs) as stream:
                 async for text in stream.text_stream:
                     yield ChatChunk(text=text)
                 final = await stream.get_final_message()

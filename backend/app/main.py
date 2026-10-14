@@ -6,6 +6,7 @@
 """
 
 import os
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
@@ -28,6 +29,8 @@ from app.middleware.policies.noop import (
     PriorityRoutingPolicy,
 )
 from app.models.base import Base
+from app.orchestrator.observability import configure_observability
+from app.schemas.auth import CurrentUser
 
 
 def _load_env_before_otel() -> None:
@@ -39,28 +42,17 @@ def _load_env_before_otel() -> None:
     load_dotenv()
 
 
-def _configure_otel() -> None:
-    """开启追踪。OTLP 必须显式设协议，否则默认 gRPC 会 ImportError。"""
-    settings = get_settings()
-    if not settings.otel_exporter_otlp_endpoint:
-        return
-    os.environ.setdefault("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
-    os.environ.setdefault("OTEL_SERVICE_NAME", "workbench-backend")
-    if settings.otel_enable_sensitive_data:
-        # 生产禁止：会把 prompt、system 指令、工具参数写进 span（与脱敏要求冲突）。
-        os.environ.setdefault("ENABLE_SENSITIVE_DATA", "true")
-    try:
-        from agent_framework.observability import configure_otel_providers
-    except ImportError:
-        return
-    configure_otel_providers(enable_sensitive_data=settings.otel_enable_sensitive_data)
+#: P0 引导管理员的固定 ID。
+#: get_current_user 用它到 app.state.bootstrap_users 里查真实身份。
+#: P1 接入 users 表后，本常量与 bootstrap_users 一起移除。
+BOOTSTRAP_ADMIN_ID = "bootstrap-admin"
 
 
 def create_app() -> FastAPI:
     _load_env_before_otel()
     settings = get_settings()
     configure_logging("DEBUG" if settings.debug else "INFO")
-    _configure_otel()
+    configure_observability(settings)
 
     from app.api.v1.models import default_entries
 
@@ -99,6 +91,15 @@ def create_app() -> FastAPI:
         os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "admin12345")
     )
     app.state.bootstrap_admin_role = UserRole.ADMIN
+    # P0 的用户目录。get_current_user 从这里取真实角色，
+    # 而不是硬编码 —— 否则管理员登录后会被识别成成员。
+    app.state.bootstrap_users = {
+        BOOTSTRAP_ADMIN_ID: CurrentUser(
+            id=BOOTSTRAP_ADMIN_ID,
+            email=app.state.bootstrap_admin_email,
+            role=UserRole.ADMIN,
+        )
+    }
 
     # --- 中间件 ---
     app.add_middleware(RequestIdMiddleware)

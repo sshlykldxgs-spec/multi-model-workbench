@@ -66,6 +66,12 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
 ignore = [
     "S101",  # assert：测试里要用
+    # RUF001/2/3 是「易混淆 Unicode 字符」检查，例如全角括号（）与 ASCII () 形近。
+    # 本项目的注释与文档字符串**刻意用中文全角标点**，这是写作规范而非疏忽，
+    # 所以这三条在本项目恒为噪声（实测 497 个错误里有 481 个来自它们）。
+    "RUF001",
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -96,20 +102,24 @@ reportMissingTypeStubs = false
 [tool.importlinter]
 root_packages = ["app"]
 
-[[tool.importlinter.contracts]]
-name = "R-1：MAF 只允许出现在编排层"
-type = "forbidden"
-source_modules = ["app.api", "app.core", "app.middleware", "app.tools", "app.knowledge", "app.workers", "app.models", "app.schemas", "app.gateway"]
-forbidden_modules = ["agent_framework"]
+# 说明：外部 SDK 的位置约束（R-1 的 MAF、R-3 的厂商 SDK）**不在这里查**。
+# 开启 include_external_packages 后 lint-imports 会追踪传递依赖链，
+# 于是 app.core.deps（只 import 了我们的 registry）会被判成「import 了 openai」——
+# 实测 app.api 与 app.core 全部误报。
+# 真实规则是「**直接** import 才受限」，import-linter 表达不了，故改由
+# app/scripts/check_layering.py 用 AST 精确检查。
 
 [[tool.importlinter.contracts]]
-name = "R-1：编排层不得依赖 API 层（依赖只能单向向下）"
+name = "依赖只能单向向下：下层不得依赖 api 与 middleware"
 type = "forbidden"
-source_modules = ["app.orchestrator", "app.gateway", "app.tools", "app.knowledge"]
+source_modules = [
+    "app.orchestrator",
+    "app.gateway",
+    "app.tools",
+    "app.knowledge",
+    "app.models",
+    "app.schemas",
+    "app.core",
+]
 forbidden_modules = ["app.api", "app.middleware"]
 
-[[tool.importlinter.contracts]]
-name = "R-3：厂商 SDK 只允许出现在协议适配器内"
-type = "forbidden"
-source_modules = ["app.api", "app.core", "app.middleware", "app.orchestrator", "app.tools", "app.knowledge", "app.workers", "app.schemas", "app.models"]
-forbidden_modules = ["openai", "anthropic", "google.genai"]
