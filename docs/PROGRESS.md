@@ -34,7 +34,8 @@
 
 - [x] **外部核实全部完成**：MAF（检查点 / HITL / OTel / YAML / Skills / base_url）、
   OpenCodeReview CLI、嵌入模型、pgvector 维度上限、中文检索方案
-- [ ] 等用户答复 `design.md` 14.1（A-21 是否改为方案乙）
+- [x] A-21 已修订为 A-26（方案乙：MAF 稳定 Skills API + 自研 DbSkillsSource）
+- [ ] **P0 脚手架开发中**（用户 2026-10-14 确认开始 P0）
 
 ## 待办
 
