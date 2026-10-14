@@ -209,3 +209,28 @@
 详细结论见 `docs/design.md` 第 12.1–12.7 节。**仍未核实**：MAF 的 OTel 开启方式、
 YAML 声明字段、Skills 机制与稳定状态、各连接器是否支持自定义 `base_url`。
 这四项 P0 开工前直接查官方文档与 `samples/`，不要凭印象写代码。
+
+---
+
+## 十一、第五轮核实：一项已批决策的前提被推翻（2026-10-14）
+
+核实 MAF 剩余四项事实后，发现**你已批准的 A-21 的理由不成立**：
+
+| 项 | 原判断（来自蓝图） | 核实结果 |
+|----|------------------|---------|
+| MAF Skills 状态 | 预览功能，不进核心路径 | **核心 Skills API 已稳定**（Python PR #6974 / .NET PR #6861 移除了 experimental 标记）；仅 MCP-based skills 仍实验性 |
+
+**新增待确认：A-21 是否改为「运行时用 MAF 稳定的 Skills API + 自研 `DbSkillsSource`」**，
+详见 `design.md` 第 14.1 节。这是**唯一因外部事实变化而需要你重新拍板的决策**。
+
+### 其他核实结论（无需决策，但影响实现）
+
+| 项 | 结论 | 影响 |
+|----|------|------|
+| OTel | 内置无独立包；**`enable_sensitive_data=True` 会把 prompt 与工具参数写进 span** | 与蓝图"日志脱敏"冲突，生产必须关闭 |
+| OTel | **token 在 `invoke_agent` span 上重复计数** | `usage_logs` 若直接累加会翻倍，必须只在 `chat` span 上求和 |
+| YAML | `agent-framework-declarative` 已稳定；**但 `HttpRequestAction` 等有副作用 action 可绕过权限模型** | **真实越权路径**，见 design.md 14.2 |
+| YAML | 表达式依赖 **.NET 运行时**（Power Fx 经 pythonnet） | 纯 Python 部署的意外负担；不用表达式可绕开 |
+| base_url | **官方支持**，无需自写 provider | ADR-0003 与 R-4 得到证实 |
+| base_url | **`OpenAIChatCompletionClient` 才是中转站首选**，官方推荐的 `OpenAIChatClient`（Responses API）多数中转不支持 | **直接决定中转站能否用**，已写进 design.md 12.8.4 |
+| base_url | Azure 与 OpenAI 环境变量并存时**优先 OpenAI** | 多条目并存时**必须显式传参，绝不依赖环境变量** |

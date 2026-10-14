@@ -99,3 +99,21 @@ uv run python -m app.scripts.check_openapi   # 导出的 OpenAPI 与 docs/api-co
 - 禁止在没有预算与轮数上限的情况下运行工作流
 - 禁止跳过门禁提交
 - 禁止一次提交跨多个阶段
+
+## 10. 与 MAF 相关的具体禁止事项（核实后新增，均有实证）
+
+- **禁止在生产开启 `enable_sensitive_data=True`**：它会把 prompt、system 指令、
+  工具定义与参数写进 span，与"日志必须脱敏"直接冲突。开发环境可开，
+  但不得指向会长期留存的外部后端。
+- **禁止在 `invoke_agent` span 上累加 token**：它会重复子 `chat` span 的计数，
+  直接导致 `usage_logs` 翻倍。统计只在 `gen_ai.operation.name = 'chat'` 上求和。
+- **禁止依赖环境变量推断模型端点**：Azure 与 OpenAI 环境变量并存时通用客户端优先 OpenAI。
+  多条目并存场景下，条目参数（含 `base_url`）一律显式传入。
+- **`openai_compat` 适配器禁止默认使用 `OpenAIChatClient`（Responses API）**：
+  多数中转站与自建网关只提供 Chat Completions。默认用 `OpenAIChatCompletionClient`。
+- **禁止把用户可编辑的 YAML 当作配置**：`HttpRequestAction`、`InvokeMcpTool`、
+  `InvokeFunctionTool`、`GotoAction` 有副作用，可绕过"配置不授予权限"。
+  YAML 导入按**代码**对待，必须过 action 白名单校验。
+- **禁止在 `configure_otel_providers()` 之前不调用 `load_dotenv()`**：
+  provider 只在创建时读一次环境变量。
+- **OTLP 必须显式设置 `OTEL_EXPORTER_OTLP_PROTOCOL`**：默认 gRPC，未装 gRPC exporter 会抛 ImportError。

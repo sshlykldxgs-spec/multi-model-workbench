@@ -490,10 +490,10 @@ Reviewer 无论由谁担任，**必须**输出同一结构。工作流只认这�
 
 | # | 待核实 | 何时必须清楚 | 状态 |
 |---|--------|------------|------|
-| 1 | MAF 1.x 实际 API：包名与版本、各连接器 import 路径、工作流 API、检查点接口与是否有 Postgres 实现、MCP 注册方式、human-in-the-loop 机制、OTel 开启方式、YAML 声明支持、预览功能清单 | **P0 开工前**（决定骨架怎么写） | **部分核实**：见 12.1 |
+| 1 | MAF 1.x 实际 API：包名与版本、各连接器 import 路径、工作流 API、检查点接口与是否有 Postgres 实现、MCP 注册方式、human-in-the-loop 机制、OTel 开启方式、YAML 声明支持、预览功能清单 | **P0 开工前**（决定骨架怎么写） | **已核实**：见 12.1–12.3、12.8 |
 | 2 | OpenCodeReview：npm 包名与安装、`ocr review` 确切子命令与参数、依赖的 Git 版本、输出是否可稳定结构化解析、沙箱内能否跑通 | **P4 开工前**（蓝图也要求先做小验证） | **已核实**：见 12.4。`--format json --audience agent` 可稳定解析 |
 | 3 | 嵌入模型选型与中文检索：最新嵌入模型型号/维度/定价、pgvector 版本与索引、Postgres 中文全文检索方案 | **P3 开工前** | **已核实**：见 12.5。**注意 pgvector 2000 维索引上限** |
-| 4 | MAF 1.0 的 YAML 声明字段 | P5 开工前 | 未开始 |
+| 4 | MAF 1.0 的 YAML 声明字段 | P5 开工前 | **已核实**：见 12.8.2，**但发现权限模型的严重冲突，见 12.8.2 末** |
 | 5 | 本机工具链升级：Git 需 ≥2.41（当前 2.39.5）、uv/ruff/pyright/docker/psql 待安装 | P0 开工前 | 待用户执行 |
 
 ---
@@ -543,8 +543,7 @@ uv pip index versions agent-framework
 
 以实际返回为准，并把版本锁进 `pyproject.toml` 与 `uv.lock`。
 
-**仍未核实**（P0 前必须补）：OTel 开启方式；YAML 声明字段；Skills 的确切机制与稳定状态；
-各连接器是否支持自定义 `base_url`。P0 开工前直接查官方文档与 `samples/`。
+**至此第 12 节开列的核实项已全部完成**，结论见 12.2–12.8。
 
 ### 12.2 检查点：已核实（重大，直接改变 P4 做法）
 
@@ -690,3 +689,189 @@ Postgres 原生全文检索对中文**需要额外扩展**（默认分词器不�
 - 镜像本身随项目版本管理，CI 里构建与扫描；
 - 成员若需额外包，走"申请→加进镜像"的流程，**不允许沙箱临时联网装**；
 - 镜像体积要控制（多语言工具链会显著变大），必要时拆成多个镜像按任务类型选择。
+
+### 12.8 其余四项 MAF 事实：已核实
+
+#### 12.8.1 OpenTelemetry：内置，无独立包
+
+框架**自带 OTel 埋点**，不需要额外 instrumentation 包。每次 `agent.run()` 产生
+`invoke_agent` / `chat` / `execute_tool` 三种 span，遵循 GenAI 语义约定。
+
+两种开启方式：
+
+- `configure_otel_providers(...)`（`agent_framework.observability`）—— 推荐，
+  一行搞定 tracer/meter/logger provider 与 OTLP exporter，读标准 `OTEL_*` 环境变量。
+- `enable_instrumentation(enable_sensitive_data=True)` —— 自己提供全局 tracer provider 时用。
+
+```python
+from agent_framework.observability import configure_otel_providers
+configure_otel_providers(enable_sensitive_data=True)   # 必须在首次 agent 运行前
+```
+
+环境变量：`OTEL_SERVICE_NAME`、`OTEL_EXPORTER_OTLP_ENDPOINT`、
+`OTEL_EXPORTER_OTLP_HEADERS`、`OTEL_EXPORTER_OTLP_PROTOCOL`、`ENABLE_SENSITIVE_DATA`。
+
+**四个必须知道的坑**：
+
+1. **协议默认 gRPC**。不设 `OTEL_EXPORTER_OTLP_PROTOCOL` 且没装 gRPC exporter，
+   会抛 `ImportError`。我们打算用 OTLP/HTTP，所以**必须显式设置该变量**。
+2. **provider 只在创建时读一次环境变量**。所以 `load_dotenv()` 必须**在**
+   `configure_otel_providers()` **之前**调用，否则 span 会落到默认服务名上。
+   这与蓝图提醒的"MAF 不会自动读 `.env`"是同一类问题，且更隐蔽。
+3. **`enable_sensitive_data=True` 会把 prompt、system 指令、工具定义与参数写进 span。**
+   → **与蓝图第 8 节"日志必须脱敏"直接冲突。** 生产环境默认必须关闭；
+   开发环境可开，但不得指向会长期留存的外部后端。这一条要写进 `backend/AGENTS.md` 的禁止事项。
+4. **token 会重复计数**：`invoke_agent` span 重复了子 `chat` span 的累计值。
+   统计 token 与费用时**必须只在 `gen_ai.operation.name = 'chat'` 上求和**，
+   否则我们的 `usage_logs` 会翻倍。这条直接影响成本控制的准确性。
+
+另一个有用事实：失败的工具只把 `execute_tool` span 标为错误，agent 会自行恢复，
+`invoke_agent` 仍是干净的；而**模型调用失败会向上传播**。
+
+#### 12.8.2 YAML 声明式工作流：稳定，但有一个针对我们的严重问题
+
+**好消息**：包 `agent-framework-declarative`（Python）已达 **1.0.0 稳定**。
+声明式工作流**加载成与代码优先写法相同的 `Workflow` 类型** —— 运行、流式、检查点、
+组合行为完全一致。这对 P5 的"导入导出"是重大利好：导出格式可以就用它，
+不必自己设计一套。
+
+```python
+from agent_framework.declarative import WorkflowFactory
+workflow = WorkflowFactory().create_workflow_from_yaml_path("support_router.yaml")
+```
+
+注意：**单 agent 的 `AgentFactory`（`create_agent_from_yaml`）仍是 experimental**，
+只有工作流那部分是稳定的。
+
+**三个坑**：
+
+1. **表达式依赖 .NET 运行时**。`=` 前缀的表达式（Power Fx）由 C# 实现经 pythonnet 桥接。
+   我们若用含表达式的 YAML，就**必须装 .NET 运行时** —— 对一个纯 Python 部署是意外负担。
+   不用表达式可绕开，但那样只能做演示级流程。
+2. **YAML 不跨语言可移植**（C# 用 `System.LastMessage` 而非 `Workflow.Inputs`），
+   部分会话操作 action 是 C# 独有。我们只用 Python，影响有限，但导出文件不要声称通用。
+3. **⚠️ 安全：YAML 里有副作用 action，且能绕过我们的权限模型。**
+
+   动作目录里的 `HttpRequestAction`、`InvokeMcpTool`、`InvokeFunctionTool`、`GotoAction`
+   **都有副作用**。这意味着：**任何能编辑配置区 YAML 的成员，都能让工作流发起 HTTP 请求
+   或调用工具 —— 即使他的角色配置里没有这些工具。**
+
+   这**直接违反**蓝图与 `design.md` 7.4 规则的核心："配置只决定'用什么、怎么分工'，
+   **不授予额外权限**"。这是一个真实的越权路径，不是理论风险。
+
+   **必须的缓解措施**（写进 P5 的发布前校验）：
+   - YAML 导入与发布时做 **action 白名单校验**：`HttpRequestAction`、`InvokeMcpTool`、
+     `InvokeFunctionTool`、`GotoAction` 一律**禁止出现在用户可编辑的配置里**，
+     或至少强制要求它们引用的工具**必须同时存在于运行者的可用工具集**内；
+   - 导入的 YAML 视为**代码**而非配置，走比配置更严的审查；
+   - 参照社区做法：CI/发布校验器在"有副作用 action 却其前序分支上没有
+     `Question` / `RequestExternalInput` 审批门"时**直接拒绝发布**。
+
+   修正后的立场：**导出可以用 MAF 的 YAML 格式，导入必须过白名单校验后才能执行。**
+
+#### 12.8.3 Skills：核心 API 已从实验性转为稳定（前提变化）
+
+**MAF 的核心 Skills API 已正式转为稳定**（Python PR #6974 移除了全部 15 个
+Skills API 上的 `@experimental` 装饰器并删除了 `ExperimentalFeature.SKILLS`；
+.NET 侧 PR #6861 同步）。**仍然实验性的是 MCP-based skills**
+（`MCPSkill` / `MCPSkillResource` / `MCPSkillsSource`，另一套 `MCP_SKILLS` 开关）。
+
+**这改变了本项目的一个已定决策**（A-21 的理由"Skills 是预览功能"已不成立）。
+详见第 14 节。
+
+**机制**：一个 skill 是一个目录，主文件 `SKILL.md`：
+
+- YAML front matter：必需 `name`（小写字母数字连字符，≤64 字符）与
+  `description`（单行，≤1024 字符）；
+- 之后的 Markdown 正文即被注入的指令；
+- 每个 skill 在自己的子目录里（`greeting/SKILL.md`，不是根目录一个 `SKILL.md`）。
+
+**渐进式加载**：agent 先只看到名称与简短描述；请求匹配时调 `load_skill` 取完整指令，
+`read_skill_resource` 取参考资料，`run_skill_script` 执行附带脚本。
+
+**关键发现 —— 默认要求人工审批**：`load_skill`、`read_skill_resource`、`run_skill_script`
+**默认都需要人工批准**。可信 skill 可以关掉"加载与读取"的审批，但
+**这不等于允许自动执行脚本**（脚本执行永远要批）。
+
+→ 这与我们的审批模型天然契合，但也意味着**开箱即用体验会很啰嗦**
+（每次加载技能都弹确认）。建议：把"加载与读取"对**管理员发布的官方技能**默认关闭审批，
+对**成员自建技能**保留审批；脚本执行一律保留审批。
+
+**三个可插拔抽象**：`SkillsProvider`、`SkillsSource`、`SkillScriptRunner`
+（另有 `CachingSkillsSource`、`SkillsSourceContext`、`SkillFrontmatter`、`SkillResource`、`SkillScript`）。
+三种编写方式：文件式、类式（可打包分发）、代码定义式。
+
+→ **`SkillsSource` 是数据库化技能的正确挂载点**：实现一个 `DbSkillsSource`
+就能让技能存数据库、可分享、可版本管理，而运行时仍用 MAF 稳定的 Skills API。
+见第 14 节。
+
+#### 12.8.4 自定义 base_url / 中转站：官方支持，已确认
+
+**确认支持**，无需自己写 provider。`base_url` 参数是专门为"兼容 OpenAI 的第三方 API"
+加的（PR #661，涉及 `OpenAIConfigMixin` 与 `OpenAIChatClient`），
+也读 `OPENAI_BASE_URL` 环境变量。
+
+**包 `agent-framework-openai` 提供三个客户端，都接受 `base_url` 与 `api_key`**：
+
+| 客户端 | 端点 | 用于 |
+|--------|------|------|
+| `OpenAIChatCompletionClient` | `/chat/completions` | **中转站首选**，见下 |
+| `OpenAIChatClient` | `/responses`（Responses API） | 官方新项目默认，但中转常不支持 |
+| `OpenAIEmbeddingClient` | `/embeddings` | 嵌入 |
+
+**⚠️ 对我们最关键的一条**：`OpenAIChatClient`（Responses API）是官方推荐的一般用途客户端，
+但**大量中转站与自建网关只提供 Chat Completions、不提供 Responses**。
+→ **我们的 `openai_compat` 适配器必须默认用 `OpenAIChatCompletionClient`**，
+而不是官方推荐的 `OpenAIChatClient`。这一条直接决定中转站能不能用。
+
+**其他必须注意的**：
+
+- **`base_url` 必须以 `/v1` 结尾且不带尾部斜杠**（多个厂商文档都强调）。
+- **Azure 与 OpenAI 环境变量同时存在时**，通用客户端**优先 OpenAI**（若设了 `OPENAI_API_KEY`）。
+  要强制走 Azure，必须显式传 `azure_endpoint` 或 `credential`。
+  → 我们多条目并存，**绝不能依赖环境变量推断，一切条目参数显式传入**。
+- **不自动读 `.env`**，需自己 `load_dotenv()` 或显式传参（蓝图已提醒，此处再次确认）。
+- 可传入自定义 `async_client`，便于做批量或代理注入。
+- **Responses 专属的工具与厂商特性未必能映射到上游**。接新中转条目时，
+  必须先验证**流式与工具调用**是否真的可用 —— 这正是 A-17（能力标记可手动覆盖）
+  与"运行前校验"存在的原因。
+
+---
+
+## 14. 需要你重新确认的决策（因外部事实变化）
+
+### 14.1 A-21 的前提不成立了：MAF Skills 已稳定
+
+**你之前批准的 A-21 是"自研 `SkillLoader` 接口 + MAF Skills 作可选实现"，
+理由写的是"MAF Skills 仍是预览功能"。这个理由现在被推翻了**
+——核实发现核心 Skills API 已转为稳定（12.8.3），只有 MCP-based skills 仍是实验性。
+
+所以在"自研"与"用 MAF"之间，前提已经变了，需要你重新拍板：
+
+| 方案 | 做法 | 优点 | 缺点 |
+|------|------|------|------|
+| **甲（原 A-21）** | 完全自研 `SkillLoader` / `SkillRegistry` | 完全自主，无框架依赖 | 重复实现 MAF 已稳定的东西；渐进式加载、资源读取、脚本执行都要自己写 |
+| **乙（新建议）** | **运行时用 MAF 稳定的 Skills API，自研 `DbSkillsSource` 实现 `SkillsSource` 接口** | 技能存数据库、可分享、可版本管理（我们的需求）**由 `DbSkillsSource` 满足**；加载/资源/脚本机制直接复用，且自带默认人工审批 | 需要遵循 MAF 的 `SKILL.md` 目录约定与 frontmatter 结构 |
+| 丙 | 甲 + 乙 都做，用配置切换 | 最灵活 | 两套都要维护，第一版明显过度设计 |
+
+**我的建议：改为方案乙。** 你的三项要求（可配置、可分享、可版本管理）
+本质是**存储与权限**问题，正好由 `DbSkillsSource` 这一个接口实现解决；
+而**运行时行为**（渐进式加载、资源读取、脚本执行与审批）没必要自己重写。
+这比原 A-21 工作量更小、行为更可靠。
+
+**若采纳，需要配套调整**：
+- `SKILL.md` 的 frontmatter 成为我们的技能格式（`name` ≤64、`description` ≤1024），
+  不再自定义一套字段；
+- 审批策略按来源分级：官方技能默认关闭"加载/读取"审批，成员自建技能保留；
+  **脚本执行一律保留审批**；
+- 数据库里存 `SKILL.md` 正文与资源，由 `DbSkillsSource` 装配成 MAF 需要的目录形态。
+
+### 14.2 YAML 导入的越权风险需要你知晓
+
+12.8.2 末发现：MAF 的 YAML 动作目录里 `HttpRequestAction`、`InvokeMcpTool`、
+`InvokeFunctionTool`、`GotoAction` **都有副作用**。若 P5 允许成员编辑或导入 YAML，
+他们将**绕过"配置不授予权限"这条规则**，让工作流调用其角色本无权使用的工具或发外部请求。
+
+这是设计层面的真实越权路径。我在 `design.md` 12.8.2 已写明缓解措施
+（导入走 action 白名单校验、YAML 视为代码而非配置、无审批门的有副作用 action 拒绝发布），
+**不需要你现在决策，但你需要知道这条约束会限制 P5 的"导入"功能开放程度**。

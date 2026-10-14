@@ -32,8 +32,9 @@
 
 ## 进行中
 
-- [x] 核实外部事实：MAF 检查点与 HITL、OpenCodeReview CLI、嵌入模型、pgvector 维度上限、中文检索
-- [ ] 仍未核实：MAF 的 OTel 开启方式、YAML 声明字段、Skills 机制、连接器是否支持自定义 `base_url`
+- [x] **外部核实全部完成**：MAF（检查点 / HITL / OTel / YAML / Skills / base_url）、
+  OpenCodeReview CLI、嵌入模型、pgvector 维度上限、中文检索方案
+- [ ] 等用户答复 `design.md` 14.1（A-21 是否改为方案乙）
 
 ## 待办
 
@@ -65,7 +66,11 @@
 | 5 | OpenCodeReview 输出格式未核实，能否稳定解析未知 | P4 前先做一次最小验证 |
 | 6 | 无评测集，换模型/升级 MAF/改提示词无法判断变好变差 | P3 起建知识库问答集，P4 起建工作流回归用例 |
 | 7 | 本会话沙箱基本拦截出网，依赖安装需你在终端执行 | 我给命令，你执行 |
-| 8 | **子代理全部因账户额度失败**（403 insufficient balance），已改为直接检索完成主要核实 | 主要事实已核实，四项 MAF 细节待 P0 前补 |
+| 8 | 子代理因账户额度失败（403），已改为直接检索 | **已全部核实完毕** |
+| 12 | **OTel 的 `enable_sensitive_data=True` 会把 prompt 与工具参数写入 span** | 与蓝图"日志脱敏"冲突，已写进禁止事项 |
+| 13 | **OTel 的 token 在 `invoke_agent` span 上重复计数** | `usage_logs` 直接累加会翻倍，必须只在 `chat` span 求和 |
+| 14 | **YAML 导入可绕过"配置不授予权限"**（`HttpRequestAction` 等有副作用 action） | **真实越权路径**，见 design.md 12.8.2 / 14.2 |
+| 15 | **A-21 前提被推翻**：MAF Skills 已稳定，不再是预览功能 | 需用户重新拍板，见 design.md 14.1 |
 | 10 | pgvector 索引最多 2000 维（`vector`），3-large 的 3072 维需 halfvec 或截断 | **已发现并记录**，见 design.md 12.5.1 |
 | 11 | 沙箱默认无外网，不预置离线依赖则代码任务无法运行 | 已定为 A-25，需自建沙箱镜像 |
 | 9 | MAF 版本号各源矛盾（1.0.1 ~ 1.18.0） | 装依赖前必须自己跑 `uv pip index versions` 确认 |
