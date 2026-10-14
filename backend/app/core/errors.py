@@ -24,18 +24,21 @@ class ErrorCode(StrEnum):
     INTERNAL_ERROR = "internal_error"
 
 
-#: 每个错误码的 HTTP 状态。前端为每个码准备人话提示（frontend/AGENTS.md 第 6 节）。
+#: 每个错误码的 HTTP 状态。用字面量而不是 starlette 的常量：
+#: 实测 starlette 1.7.0 已把 HTTP_422_UNPROCESSABLE_ENTITY 改名，
+#: 而 pytest 配了 filterwarnings=error，弃用警告会直接变成测试失败。
+#: 契约（docs/api-contract.md 第 2 节）里写的就是这些数字，两者必须一致。
 HTTP_STATUS: dict[ErrorCode, int] = {
-    ErrorCode.UNAUTHORIZED: status.HTTP_401_UNAUTHORIZED,
-    ErrorCode.FORBIDDEN: status.HTTP_403_FORBIDDEN,
-    ErrorCode.NOT_FOUND: status.HTTP_404_NOT_FOUND,
-    ErrorCode.VALIDATION_FAILED: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    ErrorCode.MODEL_UNAVAILABLE: status.HTTP_502_BAD_GATEWAY,
-    ErrorCode.RATE_LIMITED: status.HTTP_429_TOO_MANY_REQUESTS,
-    ErrorCode.BUDGET_EXCEEDED: status.HTTP_402_PAYMENT_REQUIRED,
-    ErrorCode.RUN_CONFLICT: status.HTTP_409_CONFLICT,
-    ErrorCode.TOOL_DENIED: status.HTTP_403_FORBIDDEN,
-    ErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    ErrorCode.UNAUTHORIZED: 401,
+    ErrorCode.FORBIDDEN: 403,
+    ErrorCode.NOT_FOUND: 404,
+    ErrorCode.VALIDATION_FAILED: 422,
+    ErrorCode.MODEL_UNAVAILABLE: 502,
+    ErrorCode.RATE_LIMITED: 429,
+    ErrorCode.BUDGET_EXCEEDED: 402,
+    ErrorCode.RUN_CONFLICT: 409,
+    ErrorCode.TOOL_DENIED: 403,
+    ErrorCode.INTERNAL_ERROR: 500,
 }
 
 

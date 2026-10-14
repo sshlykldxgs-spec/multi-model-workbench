@@ -10,7 +10,6 @@ from collections.abc import Iterable
 from app.core.errors import ApiError, ErrorCode
 from app.gateway.base import ModelEntry, Protocol, ProviderAdapter
 from app.gateway.mock import MockAdapter
-from app.gateway.protocols import AnthropicAdapter, GeminiAdapter, OpenAICompatAdapter
 
 
 class AdapterRegistry:
@@ -49,20 +48,50 @@ class AdapterRegistry:
         return key
 
 
-def build_default_registry(credentials: dict[str, str], entries: Iterable[ModelEntry]) -> AdapterRegistry:
+def _build_adapter(
+    protocol: Protocol, credentials: dict[str, str], protocols: set[Protocol]
+) -> ProviderAdapter:
+    """按协议构造适配器。import 写在分支内，实现惰性加载。
+
+    厂商 SDK 缺失时，只有真正用到该协议才报错，而不是一启动就崩。
+    """
+    if protocol is Protocol.OPENAI_COMPAT:
+        from app.gateway.protocols.openai_compat import OpenAICompatAdapter
+
+        return OpenAICompatAdapter(_pick(credentials, protocols, Protocol.OPENAI_COMPAT))
+    if protocol is Protocol.ANTHROPIC:
+        from app.gateway.protocols.anthropic import AnthropicAdapter
+
+        return AnthropicAdapter(_pick(credentials, protocols, Protocol.ANTHROPIC))
+    if protocol is Protocol.GEMINI:
+        from app.gateway.protocols.gemini import GeminiAdapter
+
+        return GeminiAdapter(_pick(credentials, protocols, Protocol.GEMINI))
+    raise ApiError(ErrorCode.MODEL_UNAVAILABLE, f"未知协议：{protocol}")
+
+
+def build_default_registry(
+    credentials: dict[str, str], entries: Iterable[ModelEntry]
+) -> AdapterRegistry:
     """按已配置的条目构造注册表。
 
-    只为实际用到的协议实例化适配器 —— 没配的协议不该占资源，
-    也不该因为缺密钥而在启动时报错。
+    只为实际用到的协议实例化适配器。这是刻意的：
+    只用 mock 或只用 OpenAI 的场景，不该被迫装齐 anthropic 与 google-genai。
     """
     registry = AdapterRegistry(credentials)
-    protocols = {e.protocol for e in entries}
-    if Protocol.OPENAI_COMPAT in protocols:
-        registry.register(OpenAICompatAdapter(_pick(credentials, protocols, Protocol.OPENAI_COMPAT)))
-    if Protocol.ANTHROPIC in protocols:
-        registry.register(AnthropicAdapter(_pick(credentials, protocols, Protocol.ANTHROPIC)))
-    if Protocol.GEMINI in protocols:
-        registry.register(GeminiAdapter(_pick(credentials, protocols, Protocol.GEMINI)))
+    # 只处理**启用中**条目涉及的协议：停用的条目不该成为硬依赖，
+    # 否则一个停用的 Gemini 条目会要求装 google-genai 才能启动。
+    materialized = [e for e in entries if e.enabled]
+    protocols = {e.protocol for e in materialized}
+    for protocol in protocols:
+        try:
+            registry.register(_build_adapter(protocol, credentials, protocols))
+        except ImportError as exc:
+            raise ApiError(
+                ErrorCode.MODEL_UNAVAILABLE,
+                f"协议 {protocol} 的适配器依赖缺失：{exc.name}。"
+                f"若不使用该协议，请把相关模型条目停用。",
+            ) from exc
     return registry
 
 

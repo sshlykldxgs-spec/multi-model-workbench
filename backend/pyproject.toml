@@ -11,10 +11,13 @@ dependencies = [
 
     # --- 数据 ---
     "sqlalchemy[asyncio]>=2.0.36",
+    # 以下三个仅在连库路径用到；P0 的 mock 链路不需要它们
     "alembic>=1.14",
     "asyncpg>=0.30",
     "pgvector>=0.3.6",
-    "pydantic>=2.9",
+    # [email] 额外依赖是必需的：schemas/auth.py 用了 EmailStr，
+    # 不声明它则 app.main 无法导入（实测报 "email-validator is not installed"）。
+    "pydantic[email]>=2.9",
     "pydantic-settings>=2.6",
     "python-dotenv>=1.0",
 
@@ -73,7 +76,9 @@ known-first-party = ["app"]
 
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+# 本项目的测试全部是同步的（TestClient + pytest.raises），
+# 所以不设 asyncio_mode，也不需要 pytest-asyncio。
+# 将来若要写异步测试，再引入插件并显式声明 asyncio_mode。
 testpaths = ["tests"]
 filterwarnings = ["error"]
 
