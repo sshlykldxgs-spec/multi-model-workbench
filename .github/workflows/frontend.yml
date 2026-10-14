@@ -19,11 +19,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          # 暂不启用缓存：package-lock.json 尚未提交（编写方环境 npm 被沙箱拦截，
+          # 无法生成）。待 P0 收尾把锁文件提交后，再启用 cache: npm。
 
       - name: 安装依赖
-        run: npm ci
+        # 有 package-lock.json 就 npm ci（可复现），没有则先 npm install。
+        # P0 收尾跑通后请把锁文件提交进仓库，之后一直走 npm ci。
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+            echo "::notice::package-lock.json 尚未提交，本次用 npm install。请提交锁文件。"
+          fi
 
       # 蓝图第 10 节：前端需要类型检查、代码检查和基本的端到端烟雾测试。
       - name: 门禁 1 · 类型检查

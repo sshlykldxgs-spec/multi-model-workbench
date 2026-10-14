@@ -43,6 +43,7 @@
 - [x] **P0 代码已完成**（后端 56 文件 ~2,900 行，前端 7 文件 ~685 行）
 - [x] **P0 部分验证**：语法检查全通过；**13/27 个测试实际跑过并全绿**；
       跑起来后发现并修复 3 个真实缺陷
+- [x] **契约门禁已模拟通过**（无法导入 app，改用静态方式重建路由集比对：11 条 P0 路径，无缺失无多余）
 - [ ] ⚠️ **P0 剩余验证交给 Codex**（A-33）：本机 pypi 与 npm 均被沙箱拒绝，
       装不上 `email-validator` / anthropic / google-genai / asyncpg / pgvector，
       且有 14 个测试、ruff/pyright/lint-imports、前端依赖与端到端验收从未跑过。
@@ -55,6 +56,8 @@
 | 1 | `HTTP_422_UNPROCESSABLE_ENTITY` 已弃用（starlette 1.7.0） | 配了 `filterwarnings=error`，**整个应用无法导入** | 改用字面量状态码 |
 | 2 | 协议适配器急切导入 | "只用 mock"也必须装齐 anthropic 与 google-genai，**P0 验收路径自身跑不起来** | PEP 562 惰性导入 + 只处理启用中条目 |
 | 3 | 漏声明 `email-validator` | `EmailStr` 导致 `app.main` 完全无法导入 | 改 `pydantic[email]>=2.9` |
+| 4 | CI 用 `npm ci` 但仓库没有 `package-lock.json` | **前端 CI 从第一次运行就必挂** | 有锁文件走 `npm ci`，没有则 `npm install` 并提示补锁文件 |
+| 5 | 契约门禁的正则会从正文抓到非接口路径 | `/api/v1`（"所有路径以此开头"）与 `POST /runs`（讲幂等键的叙述）被误判成接口，**门禁必红** | 正则收紧为必须跟真实路径段 + 非端点黑名单 |
 
 ## 预算默认值（A-30）
 
