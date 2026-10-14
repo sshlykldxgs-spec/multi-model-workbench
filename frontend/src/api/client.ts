@@ -99,7 +99,9 @@ export async function startRun(
   handlers: RunHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/conversations/${conversationId}/runs`, {
+  // exactOptionalPropertyTypes 下不能显式传 undefined，
+  // 所以 signal 只在存在时才放进 init。取消功能靠 AbortController 触发。
+  const init: RequestInit = {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -108,8 +110,10 @@ export async function startRun(
       'Idempotency-Key': crypto.randomUUID(),
     },
     body: JSON.stringify(body),
-    signal,
-  });
+  };
+  if (signal) init.signal = signal;
+
+  const res = await fetch(`/api/v1/conversations/${conversationId}/runs`, init);
 
   if (!res.ok) {
     let code = 'internal_error';

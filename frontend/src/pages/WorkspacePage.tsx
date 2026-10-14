@@ -79,18 +79,16 @@ export function WorkspacePage() {
           onEvent: (event, payload) => {
             if (event === 'usage') {
               setTurns((prev) =>
-                prev.map((t) =>
-                  t.id === assistantId
-                    ? {
-                        ...t,
-                        cost: typeof payload.cost_usd === 'number' ? payload.cost_usd : undefined,
-                        upstreamModel:
-                          typeof payload.upstream_model === 'string'
-                            ? payload.upstream_model
-                            : undefined,
-                      }
-                    : t,
-                ),
+                prev.map((t) => {
+                  if (t.id !== assistantId) return t;
+                  // exactOptionalPropertyTypes：有值才写字段，不显式赋 undefined
+                  const next: Turn = { ...t };
+                  if (typeof payload.cost_usd === 'number') next.cost = payload.cost_usd;
+                  if (typeof payload.upstream_model === 'string') {
+                    next.upstreamModel = payload.upstream_model;
+                  }
+                  return next;
+                }),
               );
             }
             if (event === 'run.failed') {
