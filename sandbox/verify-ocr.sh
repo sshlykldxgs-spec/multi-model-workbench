@@ -54,10 +54,20 @@ fi
 echo "    无外网：符合预期"
 
 echo "==> 4. 在沙箱里跑 ocr review --preview（不调模型，零成本）"
+# 两个必需的环境变量（缺陷 22，实测发现）：
+#   safe.directory —— 挂载进来的仓库属主是宿主 uid（容器里看到是 0），而沙箱以
+#                     uid 10001 运行，Git >= 2.35.2 会判 "dubious ownership" 直接拒绝，
+#                     ocr 随之报 "/work is not a git repository"。
+#   HOME=/tmp      —— 根文件系统只读，ocr/git 若往 $HOME 写配置或缓存会失败。
+# 这两条是沙箱运行代码任务的固定前提，P4 的执行器必须同样传入（见 docs/sandbox-image.md 第 7 节）。
 docker run --rm \
   --network none \
   --cpus 2 --memory 2g \
   --read-only --tmpfs /tmp \
+  -e HOME=/tmp \
+  -e GIT_CONFIG_COUNT=1 \
+  -e GIT_CONFIG_KEY_0=safe.directory \
+  -e GIT_CONFIG_VALUE_0=/work \
   -v "$WORKDIR/repo:/work:ro" \
   -w /work \
   "$IMAGE" \

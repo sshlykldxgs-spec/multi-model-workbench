@@ -126,6 +126,38 @@ P0 阶段**不做完整镜像**，只做最小验证，目的是尽早回答"Ope
 | 4 | 网络策略验证 | 容器内 `curl https://example.com` 必须失败；对白名单目标必须成功 |
 | 5 | `sandbox/requirements-sandbox.txt` | 依赖清单骨架 |
 
+### 7.1 验证结果（2026-10-15 实测）
+
+| 检查 | 结果 |
+|------|------|
+| `Dockerfile.base` 构建 | 通过；容器内 `git version 2.47.1` |
+| `Dockerfile.ocr` 构建 | 通过；Node 20 + `ocr` 预装 |
+| 容器内 `curl https://example.com` | **失败**（符合预期，`--network none` 生效） |
+| `ocr review --preview` | 通过：`Preview: 1 file(s) changed … Will review (1): [A] demo.py` |
+
+构建期依赖：Docker Hub 需走镜像加速器（`auth.docker.io` 直连超时）；
+`deb.nodesource.com`、`registry.npmjs.org`、`mirrors.edge.kernel.org` 直连可达。
+
+### 7.2 沙箱运行代码任务的两个固定前提（缺陷 22，P4 执行器必须照做）
+
+第一次跑 `verify-ocr.sh` 在第 4 步失败：`Error: /work is not a git repository`。
+根因不是 ocr，是 **Git 的属主检查**：挂载进来的仓库属主是宿主 uid（容器内看到是 0），
+而沙箱以 uid 10001 运行，Git ≥ 2.35.2 判定 "dubious ownership" 直接拒绝打开仓库。
+
+每次 `docker run` 必须传：
+
+```
+-e HOME=/tmp
+-e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/work
+```
+
+- `safe.directory=/work`：放行挂载目录。用环境变量而不是改镜像里的 gitconfig，
+  因为根文件系统只读，且挂载路径由执行器决定。
+- `HOME=/tmp`：根文件系统只读，ocr / git / npm 往 `$HOME` 写缓存或配置会失败。
+
+这两条写进 `verify-ocr.sh` 作为参考实现；**P4-A 的沙箱执行器要用同一组参数**，
+否则任何依赖 Git 的工具（ocr、diff、blame）在沙箱里都起不来。
+
 **为什么用 `ocr review --preview`**：它**不调用模型**，零成本。
 若连 `--preview` 都跑不通，说明 Node/Git 依赖或离线缓存有问题；
 跑通它就能把"能不能装、能不能跑"这两个问题与"模型配置"解耦，先钉死前者。
@@ -136,7 +168,7 @@ P4 开始前要先做一次小验证"）。现在核实到它有 `--format json 
 
 ## 8. 已知待办
 
-- [ ] Git ≥ 2.41 的具体安装方式（Debian slim 自带版本偏低，需从官方源或源码装）
+- [x] ~~Git ≥ 2.41 的具体安装方式~~：从 kernel.org 源码编 2.47.1，已验证
 - [ ] wheelhouse 的初始包清单（P0 只需 openai/anthropic/google-genai 等最小集）
 - [ ] 出口白名单代理的选型（Caddy 不适用，需正向代理，如 tinyproxy + 域名白名单）
 - [ ] 镜像体积目标与上限（多语言工具链容易超过 2 GB）

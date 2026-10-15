@@ -98,6 +98,7 @@ P0 骨架已写完并**跑通全部门禁**。P0 之后由 Codex 执行、Claude
 | 19 | **e2e 门禁从未能运行**：`smoke.spec.ts` 与 `playwright.config.ts` 从 `playwright` 包导入 `defineConfig`/`test`/`expect`，但该包只导出浏览器驱动，运行器在 `@playwright/test` 里，而它未声明为依赖 | 端到端门禁形同虚设 |
 | 20 | **原 e2e 断言证明不了流式**：只用 `toContainText` 检查最终文本，后端一次返回整段同样通过 | P0 的核心要求「看到逐字输出」实际未被测到。改为按 20ms 采样，要求 ≥3 个递增中间态 |
 | 21 | **CI 门禁与本地不一致**：`backend.yml` 只有六道，缺 `check_layering` | **R-1 与 R-3 的 SDK 位置在 CI 里完全没查** —— 本地红、CI 绿，比没门禁更危险 |
+| 22 | **沙箱里 Git 拒绝挂载仓库**：宿主 uid 与容器 uid 10001 不同，Git 判 dubious ownership，`ocr` 报 not a git repository | 沙箱内任何依赖 Git 的工具都起不来。`docker run` 必须传 `safe.directory=/work` 与 `HOME=/tmp`，已写进 `verify-ocr.sh` 与 `sandbox-image.md` 7.2，**P4 执行器照做** |
 
 ## 门禁现状（2026-10-14 实测全绿）
 
@@ -161,7 +162,7 @@ R-3 的真实规则是"**直接** import 才受限"，`import-linter` 表达不�
 - [x] ~~确认真实版本~~：agent-framework **1.21.0**
 - [x] ~~gh 登录与建仓~~：远程 `origin` = `github.com/sshlykldxgs-spec/multi-model-workbench`，已推送
 - [ ] **用户执行**：人工点击验收（P0 原文要求，必须你亲手做）
-- [ ] **用户执行**：装 Docker 后告知，由指挥方跑 `sandbox/verify-ocr.sh` 并审查结果（A-44）
+- [x] ~~沙箱验证~~：`verify-ocr.sh` 通过（Git 2.47.1 / 无外网 / ocr preview 成功），见 `sandbox-image.md` 7.1
 - [x] ~~升级 Git~~：2.56.0
 - [x] ~~后端运行时跑 `npm run gen:api`~~ 已完成
 
