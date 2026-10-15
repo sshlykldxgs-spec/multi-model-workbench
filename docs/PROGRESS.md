@@ -159,28 +159,19 @@ R-3 的真实规则是"**直接** import 才受限"，`import-linter` 表达不�
 - [x] ~~安装工具链~~：uv 已装，`backend/.venv` 齐备（ruff / pyright / pytest / 全部依赖）
 - [x] ~~提交锁文件~~：`uv.lock` 与 `package-lock.json` 已生成并入库
 - [x] ~~确认真实版本~~：agent-framework **1.21.0**
-- [ ] **用户执行**：`gh auth login`（当前未登录，无法建远程仓）
-- [ ] **用户执行**：在 GitHub 建私有仓（命令见「远程仓库」一节）
+- [x] ~~gh 登录与建仓~~：远程 `origin` = `github.com/sshlykldxgs-spec/multi-model-workbench`，已推送
 - [ ] **用户执行**：人工点击验收（P0 原文要求，必须你亲手做）
 - [ ] **用户执行**：装 Docker 后告知，由指挥方跑 `sandbox/verify-ocr.sh` 并审查结果（A-44）
-- [ ] **P4 前**：升级 Git 到 ≥2.41（现在是 2.39.5）
+- [x] ~~升级 Git~~：2.56.0
 - [x] ~~后端运行时跑 `npm run gen:api`~~ 已完成
 
 ## 远程仓库（A-38）
 
-**状态：未建。** `gh` 未登录，且仓库没配 git 身份（提交时用 `-c` 临时指定）。
+**状态：已建并推送。** `origin` = `https://github.com/sshlykldxgs-spec/multi-model-workbench`，
+`main` 跟踪 `origin/main`。gh 以 `sshlykldxgs-spec` 登录，scopes `repo` / `read:org` / `workflow`。
 
-建仓命令（需用户执行）：
-
-```bash
-gh auth login
-```
-
-```bash
-cd /Users/pengxuezhi/项目蓝图2.0/multi-model-workbench && gh repo create multi-model-workbench --private --source=. --remote=origin --push
-```
-
-`.gitignore` 已核对：`package-lock.json` 与 `uv.lock` **不会被忽略**（必须提交，CI 依赖它们）。
+工作约定（见 `docs/tasks/移交指南.md`）：每张任务卡一个分支，Codex push 分支并开 PR，
+**不合并**；指挥方审过说"通过"后由用户合并。`main` 始终只含审过的代码。
 
 ## 环境现状（本机，2026-10-14 实测）
 
@@ -188,11 +179,12 @@ cd /Users/pengxuezhi/项目蓝图2.0/multi-model-workbench && gh repo create mul
 |------|------|
 | Python | 3.12.8（蓝图要求 3.11+，满足） |
 | Node / npm | 24.21.0 / 11.19.0 |
-| git | 2.39.5 —— **仍低于 OpenCodeReview 要求的 2.41+，P4 前必须升级** |
+| git | **2.56.0**（brew，已满足 OpenCodeReview 的 2.41+） |
 | Homebrew | 7.0.8 |
-| gh | 2.102.0，**未登录**（远程仓未建） |
+| gh | 2.102.0，已登录 `sshlykldxgs-spec`，scopes repo/read:org/workflow |
 | uv | **已装**（brew） |
-| docker、psql | **未装** —— 沙箱验证与本地数据库起不来 |
+| docker | 29.8.2，加速器 `docker.m.daocloud.io` 已配 |
+| psql | 未装（P1-A 起数据库用 docker compose，不需本机 psql） |
 | `backend/.venv` 内 | ruff 0.17.0 / pyright 1.1.414 / pytest 9.1.1 |
 | **agent-framework** | **1.21.0**（实测装上的真实版本） |
 
@@ -213,6 +205,7 @@ cd /Users/pengxuezhi/项目蓝图2.0/multi-model-workbench && gh repo create mul
 | 5 | OpenCodeReview 输出格式未核实，能否稳定解析未知 | P4 前先做一次最小验证 |
 | 6 | 无评测集，换模型/升级 MAF/改提示词无法判断变好变差 | P3 起建知识库问答集，P4 起建工作流回归用例 |
 | 7 | Bash 沙箱仍拦 pypi/npm 出网 | **已绕过**：终端工具不受沙箱限制，brew/npm/uv/插件安装全走终端 |
+| 18 | Docker Hub 鉴权域名 `auth.docker.io` 直连超时 | **已解决**：配镜像加速器 `docker.m.daocloud.io` |
 | 8 | 子代理因账户额度失败（403），已改为直接检索 | **已全部核实完毕** |
 | 12 | **OTel 的 `enable_sensitive_data=True` 会把 prompt 与工具参数写入 span** | 与蓝图"日志脱敏"冲突，已写进禁止事项 |
 | 13 | **OTel 的 token 在 `invoke_agent` span 上重复计数** | `usage_logs` 直接累加会翻倍，必须只在 `chat` span 求和 |
